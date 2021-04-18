@@ -15,43 +15,41 @@ namespace Sonata\DoctrineORMAdminBundle\Builder;
 
 use Doctrine\ORM\Mapping\ClassMetadata;
 use Sonata\AdminBundle\Admin\AdminInterface;
-use Sonata\AdminBundle\Admin\FieldDescriptionInterface;
 use Sonata\AdminBundle\Builder\DatagridBuilderInterface;
 use Sonata\AdminBundle\Datagrid\Datagrid;
 use Sonata\AdminBundle\Datagrid\DatagridInterface;
 use Sonata\AdminBundle\Datagrid\PagerInterface;
 use Sonata\AdminBundle\Datagrid\SimplePager;
+use Sonata\AdminBundle\FieldDescription\FieldDescriptionInterface;
+use Sonata\AdminBundle\FieldDescription\TypeGuesserInterface;
 use Sonata\AdminBundle\Filter\FilterFactoryInterface;
-use Sonata\AdminBundle\Guesser\TypeGuesserInterface;
 use Sonata\DoctrineORMAdminBundle\Datagrid\Pager;
+use Sonata\DoctrineORMAdminBundle\Datagrid\ProxyQueryInterface;
 use Sonata\DoctrineORMAdminBundle\Filter\ModelAutocompleteFilter;
 use Symfony\Component\Form\Extension\Core\Type\FormType;
 use Symfony\Component\Form\FormFactoryInterface;
 
-/**
- * @final since sonata-project/doctrine-orm-admin-bundle 3.24
- */
-class DatagridBuilder implements DatagridBuilderInterface
+final class DatagridBuilder implements DatagridBuilderInterface
 {
     /**
      * @var FilterFactoryInterface
      */
-    protected $filterFactory;
+    private $filterFactory;
 
     /**
      * @var FormFactoryInterface
      */
-    protected $formFactory;
+    private $formFactory;
 
     /**
      * @var TypeGuesserInterface
      */
-    protected $guesser;
+    private $guesser;
 
     /**
      * @var bool
      */
-    protected $csrfTokenEnabled;
+    private $csrfTokenEnabled;
 
     public function __construct(
         FormFactoryInterface $formFactory,
@@ -65,78 +63,36 @@ class DatagridBuilder implements DatagridBuilderInterface
         $this->csrfTokenEnabled = $csrfTokenEnabled;
     }
 
-    public function fixFieldDescription(AdminInterface $admin, FieldDescriptionInterface $fieldDescription): void
+    public function fixFieldDescription(FieldDescriptionInterface $fieldDescription): void
     {
-        // set default values
-        $fieldDescription->setAdmin($admin);
+        if ([] !== $fieldDescription->getFieldMapping()) {
+            $fieldDescription->setOption('field_mapping', $fieldDescription->getOption('field_mapping', $fieldDescription->getFieldMapping()));
 
-        // NEXT_MAJOR: Remove this block.
-        if ($admin->getModelManager()->hasMetadata($admin->getClass(), 'sonata_deprecation_mute')) {
-            [$metadata, $lastPropertyName, $parentAssociationMappings] = $admin->getModelManager()
-                ->getParentMetadataForProperty($admin->getClass(), $fieldDescription->getName());
-
-            // set the default field mapping
-            if (isset($metadata->fieldMappings[$lastPropertyName])) {
-                $fieldDescription->setOption(
-                    'field_mapping',
-                    $fieldDescription->getOption(
-                        'field_mapping',
-                        $fieldMapping = $metadata->fieldMappings[$lastPropertyName]
-                    )
-                );
-
-                if ('string' === $fieldMapping['type']) {
-                    $fieldDescription->setOption('global_search', $fieldDescription->getOption('global_search', true)); // always search on string field only
-                }
-
-                // NEXT_MAJOR: Remove this, the fieldName should be correctly set at the creation.
-                if (!empty($embeddedClasses = $metadata->embeddedClasses)
-                    && isset($fieldMapping['declaredField'])
-                    && \array_key_exists($fieldMapping['declaredField'], $embeddedClasses)
-                ) {
-                    $fieldDescription->setOption(
-                        'field_name',
-                        $fieldMapping['fieldName']
-                    );
-                }
+            if ('string' === $fieldDescription->getFieldMapping()['type']) {
+                $fieldDescription->setOption('global_search', $fieldDescription->getOption('global_search', true)); // always search on string field only
             }
-
-            // set the default association mapping
-            if (isset($metadata->associationMappings[$lastPropertyName])) {
-                $fieldDescription->setOption(
-                    'association_mapping',
-                    $fieldDescription->getOption(
-                        'association_mapping',
-                        $metadata->associationMappings[$lastPropertyName]
-                    )
-                );
-            }
-
-            $fieldDescription->setOption(
-                'parent_association_mappings',
-                $fieldDescription->getOption('parent_association_mappings', $parentAssociationMappings)
-            );
         }
 
-        // NEXT_MAJOR: Uncomment this code.
-        //if ([] !== $fieldDescription->getFieldMapping()) {
-        //    $fieldDescription->setOption('field_mapping', $fieldDescription->getOption('field_mapping', $fieldDescription->getFieldMapping()));
-        //
-        //    if ('string' === $fieldDescription->getFieldMapping()['type']) {
-        //        $fieldDescription->setOption('global_search', $fieldDescription->getOption('global_search', true)); // always search on string field only
-        //    }
-        //}
-        //
-        //if ([] !== $fieldDescription->getAssociationMapping()) {
-        //    $fieldDescription->setOption('association_mapping', $fieldDescription->getOption('association_mapping', $fieldDescription->getAssociationMapping()));
-        //}
-        //
-        //if ([] !== $fieldDescription->getParentAssociationMappings()) {
-        //    $fieldDescription->setOption('parent_association_mappings', $fieldDescription->getOption('parent_association_mappings', $fieldDescription->getParentAssociationMappings()));
-        //}
+        if ([] !== $fieldDescription->getAssociationMapping()) {
+            $fieldDescription->setOption('association_mapping', $fieldDescription->getOption('association_mapping', $fieldDescription->getAssociationMapping()));
+        }
 
-        $fieldDescription->setOption('code', $fieldDescription->getOption('code', $fieldDescription->getName()));
-        $fieldDescription->setOption('name', $fieldDescription->getOption('name', $fieldDescription->getName()));
+        if ([] !== $fieldDescription->getParentAssociationMappings()) {
+            $fieldDescription->setOption('parent_association_mappings', $fieldDescription->getOption('parent_association_mappings', $fieldDescription->getParentAssociationMappings()));
+        }
+
+        $fieldDescription->setOption('field_name', $fieldDescription->getOption('field_name', $fieldDescription->getFieldName()));
+
+        $fieldDescription->mergeOption('field_options', ['required' => false]);
+
+        if (ModelAutocompleteFilter::class === $fieldDescription->getType()) {
+            $fieldDescription->mergeOption('field_options', [
+                'class' => $fieldDescription->getTargetModel(),
+                'model_manager' => $fieldDescription->getAdmin()->getModelManager(),
+                'admin_code' => $fieldDescription->getAdmin()->getCode(),
+                'context' => 'filter',
+            ]);
+        }
 
         if (\in_array($fieldDescription->getMappingType(), [
             ClassMetadata::ONE_TO_MANY,
@@ -144,22 +100,25 @@ class DatagridBuilder implements DatagridBuilderInterface
             ClassMetadata::MANY_TO_ONE,
             ClassMetadata::ONE_TO_ONE,
         ], true)) {
-            $admin->attachAdminClass($fieldDescription);
+            $fieldDescription->getAdmin()->attachAdminClass($fieldDescription);
         }
     }
 
-    public function addFilter(DatagridInterface $datagrid, ?string $type, FieldDescriptionInterface $fieldDescription, AdminInterface $admin): void
+    public function addFilter(DatagridInterface $datagrid, ?string $type, FieldDescriptionInterface $fieldDescription): void
     {
         if (null === $type) {
-            $guessType = $this->guesser->guessType($admin->getClass(), $fieldDescription->getName(), $admin->getModelManager());
+            $guessType = $this->guesser->guess($fieldDescription);
+            if (null === $guessType) {
+                throw new \InvalidArgumentException(sprintf(
+                    'Cannot guess a type for the field description "%s", You MUST provide a type.',
+                    $fieldDescription->getName()
+                ));
+            }
 
             $type = $guessType->getType();
-
             $fieldDescription->setType($type);
 
-            $options = $guessType->getOptions();
-
-            foreach ($options as $name => $value) {
+            foreach ($guessType->getOptions() as $name => $value) {
                 if (\is_array($value)) {
                     $fieldDescription->setOption($name, array_merge($value, $fieldDescription->getOption($name, [])));
                 } else {
@@ -170,27 +129,10 @@ class DatagridBuilder implements DatagridBuilderInterface
             $fieldDescription->setType($type);
         }
 
-        $this->fixFieldDescription($admin, $fieldDescription);
-        $admin->addFilterFieldDescription($fieldDescription->getName(), $fieldDescription);
-
-        $fieldDescription->mergeOption('field_options', ['required' => false]);
-
-        if (ModelAutocompleteFilter::class === $type) {
-            $fieldDescription->mergeOption('field_options', [
-                'class' => $fieldDescription->getTargetModel(),
-                'model_manager' => $fieldDescription->getAdmin()->getModelManager(),
-                'admin_code' => $admin->getCode(),
-                'context' => 'filter',
-            ]);
-        }
+        $this->fixFieldDescription($fieldDescription);
+        $fieldDescription->getAdmin()->addFilterFieldDescription($fieldDescription->getName(), $fieldDescription);
 
         $filter = $this->filterFactory->create($fieldDescription->getName(), $type, $fieldDescription->getOptions());
-
-        // NEXT_MAJOR: Remove this code since it was introduced in SonataAdmin (https://github.com/sonata-project/SonataAdminBundle/pull/6571)
-        if (false !== $filter->getLabel() && !$filter->getLabel()) {
-            $filter->setLabel($admin->getLabelTranslatorStrategy()->getLabel($fieldDescription->getName(), 'filter', 'label'));
-        }
-
         $datagrid->addFilter($filter);
     }
 
@@ -212,15 +154,20 @@ class DatagridBuilder implements DatagridBuilderInterface
      * Get pager by pagerType.
      *
      * @throws \RuntimeException If invalid pager type is set
+     *
+     * @return PagerInterface<ProxyQueryInterface>
      */
-    protected function getPager(string $pagerType): PagerInterface
+    private function getPager(string $pagerType): PagerInterface
     {
         switch ($pagerType) {
             case Pager::TYPE_DEFAULT:
                 return new Pager();
 
             case Pager::TYPE_SIMPLE:
-                return new SimplePager();
+                /** @var SimplePager<ProxyQueryInterface> $simplePager */
+                $simplePager = new SimplePager();
+
+                return $simplePager;
 
             default:
                 throw new \RuntimeException(sprintf('Unknown pager type "%s".', $pagerType));

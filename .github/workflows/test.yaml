@@ -11,9 +11,6 @@ on:
             - master
     pull_request:
 
-env:
-    ACTIONS_ALLOW_UNSECURE_COMMANDS: true
-
 jobs:
     test:
         name: PHP ${{ matrix.php-version }} + ${{ matrix.dependencies }} + ${{ matrix.variant }}
@@ -27,6 +24,7 @@ jobs:
                 php-version:
                     - '7.3'
                     - '7.4'
+                    - '8.0'
                 dependencies: [highest]
                 allowed-to-fail: [false]
                 variant: [normal]
@@ -37,13 +35,9 @@ jobs:
                       variant: normal
                     - php-version: '8.0'
                       dependencies: highest
-                      allowed-to-fail: true
-                      variant: normal
-                    - php-version: '7.4'
-                      dependencies: highest
                       allowed-to-fail: false
                       variant: 'symfony/symfony:"4.4.*"'
-                    - php-version: '7.4'
+                    - php-version: '8.0'
                       dependencies: highest
                       allowed-to-fail: false
                       variant: 'sonata-project/admin-bundle:"dev-master"'
@@ -58,13 +52,10 @@ jobs:
                   php-version: ${{ matrix.php-version }}
                   coverage: pcov
                   tools: composer:v2
+                  extensions: zip
 
             - name: Add PHPUnit matcher
               run: echo "::add-matcher::${{ runner.tool_cache }}/phpunit.json"
-
-            - name: Configuration required for PHP 8.0
-              if: matrix.php-version == '8.0'
-              run: composer config platform.php 7.4.99
 
             - name: Install variant
               if: matrix.variant != 'normal'

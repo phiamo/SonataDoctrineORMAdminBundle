@@ -13,15 +13,11 @@ declare(strict_types=1);
 
 namespace Sonata\DoctrineORMAdminBundle\Filter;
 
-use Sonata\AdminBundle\Datagrid\ProxyQueryInterface as BaseProxyQueryInterface;
 use Sonata\AdminBundle\Form\Type\Filter\ChoiceType;
 use Sonata\AdminBundle\Form\Type\Operator\StringOperatorType;
 use Sonata\DoctrineORMAdminBundle\Datagrid\ProxyQueryInterface;
 
-/**
- * @final since sonata-project/doctrine-orm-admin-bundle 3.24
- */
-class StringFilter extends Filter
+final class StringFilter extends Filter
 {
     public const TRIM_NONE = 0;
     public const TRIM_LEFT = 1;
@@ -47,20 +43,9 @@ class StringFilter extends Filter
         StringOperatorType::TYPE_NOT_CONTAINS,
     ];
 
-    public function filter(BaseProxyQueryInterface $query, $alias, $field, $data): void
+    public function filter(ProxyQueryInterface $query, string $alias, string $field, array $data): void
     {
-        /* NEXT_MAJOR: Remove this deprecation and update the typehint */
-        if (!$query instanceof ProxyQueryInterface) {
-            @trigger_error(sprintf(
-                'Passing %s as argument 1 to %s() is deprecated since sonata-project/doctrine-orm-admin-bundle 3.27'
-                .' and will throw a \TypeError error in version 4.0. You MUST pass an instance of %s instead.',
-                \get_class($query),
-                __METHOD__,
-                ProxyQueryInterface::class
-            ));
-        }
-
-        if (!\is_array($data) || !\array_key_exists('value', $data)) {
+        if (!\array_key_exists('value', $data)) {
             return;
         }
 
@@ -74,18 +59,22 @@ class StringFilter extends Filter
             return;
         }
 
-        $operator = $this->getOperator((int) $type);
+        $operator = $this->getOperator($type);
 
         // c.name > '1' => c.name OPERATOR :FIELDNAME
         $parameterName = $this->getNewParameterName($query);
 
-        $or = $query->getQueryBuilder()->expr()->orX();
+        $forceCaseInsensitivity = true === $this->getOption('force_case_insensitivity', false);
 
-        if ($this->getOption('case_sensitive')) {
-            $or->add(sprintf('%s.%s %s :%s', $alias, $field, $operator, $parameterName));
+        if ($forceCaseInsensitivity && '' !== $data['value']) {
+            $clause = 'LOWER(%s.%s) %s :%s';
         } else {
-            $or->add(sprintf('LOWER(%s.%s) %s :%s', $alias, $field, $operator, $parameterName));
+            $clause = '%s.%s %s :%s';
         }
+
+        $or = $query->getQueryBuilder()->expr()->orX(
+            sprintf($clause, $alias, $field, $operator, $parameterName)
+        );
 
         if (StringOperatorType::TYPE_NOT_CONTAINS === $type || StringOperatorType::TYPE_NOT_EQUAL === $type) {
             $or->add($query->getQueryBuilder()->expr()->isNull(sprintf('%s.%s', $alias, $field)));
@@ -105,23 +94,14 @@ class StringFilter extends Filter
                 $format = '%%%s';
                 break;
             default:
-                // NEXT_MAJOR: Remove this line, uncomment the following and remove the deprecation
-                $format = $this->getOption('format');
-                // $format = '%%%s%%';
-
-                if ('%%%s%%' !== $format) {
-                    @trigger_error(
-                        'The "format" option is deprecated since sonata-project/doctrine-orm-admin-bundle 3.21 and will be removed in version 4.0.',
-                        \E_USER_DEPRECATED
-                    );
-                }
+                $format = '%%%s%%';
         }
 
         $query->getQueryBuilder()->setParameter(
             $parameterName,
             sprintf(
                 $format,
-                $this->getOption('case_sensitive') ? $data['value'] : mb_strtolower($data['value'])
+                true !== $forceCaseInsensitivity || '' === $data['value'] ? $data['value'] : mb_strtolower($data['value'])
             )
         );
     }
@@ -129,9 +109,7 @@ class StringFilter extends Filter
     public function getDefaultOptions(): array
     {
         return [
-            // NEXT_MAJOR: Remove the format option.
-            'format' => '%%%s%%',
-            'case_sensitive' => true,
+            'force_case_insensitivity' => false,
             'trim' => self::TRIM_BOTH,
             'allow_empty' => false,
         ];
@@ -148,7 +126,15 @@ class StringFilter extends Filter
 
     private function getOperator(int $type): string
     {
-        return self::CHOICES[$type] ?? self::CHOICES[StringOperatorType::TYPE_CONTAINS];
+        if (!isset(self::CHOICES[$type])) {
+            throw new \OutOfRangeException(sprintf(
+                'The type "%s" is not supported, allowed one are "%s".',
+                $type,
+                implode('", "', array_keys(self::CHOICES))
+            ));
+        }
+
+        return self::CHOICES[$type];
     }
 
     private function trim(string $string): string

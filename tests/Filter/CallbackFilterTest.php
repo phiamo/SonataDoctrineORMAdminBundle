@@ -14,6 +14,7 @@ declare(strict_types=1);
 namespace Sonata\DoctrineORMAdminBundle\Tests\Filter;
 
 use Sonata\DoctrineORMAdminBundle\Datagrid\ProxyQuery;
+use Sonata\DoctrineORMAdminBundle\Datagrid\ProxyQueryInterface;
 use Sonata\DoctrineORMAdminBundle\Filter\CallbackFilter;
 use Symfony\Bridge\PhpUnit\ExpectDeprecationTrait;
 use Symfony\Component\Form\Extension\Core\Type\HiddenType;
@@ -34,109 +35,82 @@ class CallbackFilterTest extends FilterTestCase
 
     public function testFilterClosure(): void
     {
-        $builder = new ProxyQuery($this->createQueryBuilderStub());
+        $proxyQuery = new ProxyQuery($this->createQueryBuilderStub());
 
         $filter = new CallbackFilter();
         $filter->initialize('field_name', [
-            'callback' => static function ($builder, $alias, $field, $value) {
-                $builder->andWhere(sprintf('CUSTOM QUERY %s.%s', $alias, $field));
-                $builder->setParameter('value', $value);
+            'callback' => static function (ProxyQueryInterface $query, string $alias, string $field, array $data): bool {
+                $query->getQueryBuilder()->andWhere(sprintf('CUSTOM QUERY %s.%s', $alias, $field));
+                $query->getQueryBuilder()->setParameter('value', $data['value']);
 
                 return true;
             },
         ]);
 
-        $filter->filter($builder, 'alias', 'field', 'myValue');
+        $filter->filter($proxyQuery, 'alias', 'field', ['value' => 'myValue']);
 
-        $this->assertSame(['CUSTOM QUERY alias.field'], $builder->query);
-        $this->assertSame(['value' => 'myValue'], $builder->queryParameters);
+        $this->assertSameQuery(['WHERE CUSTOM QUERY alias.field'], $proxyQuery);
+        $this->assertSameQueryParameters(['value' => 'myValue'], $proxyQuery);
         $this->assertTrue($filter->isActive());
     }
 
     public function testFilterMethod(): void
     {
-        $builder = new ProxyQuery($this->createQueryBuilderStub());
+        $proxyQuery = new ProxyQuery($this->createQueryBuilderStub());
 
         $filter = new CallbackFilter();
         $filter->initialize('field_name', [
             'callback' => [$this, 'customCallback'],
         ]);
 
-        $filter->filter($builder, 'alias', 'field', 'myValue');
+        $filter->filter($proxyQuery, 'alias', 'field', ['value' => 'myValue']);
 
-        $this->assertSame(['CUSTOM QUERY alias.field'], $builder->query);
-        $this->assertSame(['value' => 'myValue'], $builder->queryParameters);
+        $this->assertSameQuery(['WHERE CUSTOM QUERY alias.field'], $proxyQuery);
+        $this->assertSameQueryParameters(['value' => 'myValue'], $proxyQuery);
         $this->assertTrue($filter->isActive());
     }
 
-    public function customCallback($builder, $alias, $field, $value)
+    /**
+     * @phpstan-param array{value: mixed} $data
+     */
+    public function customCallback(ProxyQueryInterface $query, string $alias, string $field, array $data): bool
     {
-        $builder->andWhere(sprintf('CUSTOM QUERY %s.%s', $alias, $field));
-        $builder->setParameter('value', $value);
+        $query->getQueryBuilder()->andWhere(sprintf('CUSTOM QUERY %s.%s', $alias, $field));
+        $query->getQueryBuilder()->setParameter('value', $data['value']);
 
         return true;
     }
 
     public function testFilterException(): void
     {
-        $this->expectException(\RuntimeException::class);
-
-        $builder = new ProxyQuery($this->createQueryBuilderStub());
+        $proxyQuery = new ProxyQuery($this->createQueryBuilderStub());
 
         $filter = new CallbackFilter();
         $filter->initialize('field_name', []);
 
-        $filter->filter($builder, 'alias', 'field', 'myValue');
+        $this->expectException(\RuntimeException::class);
+        $filter->filter($proxyQuery, 'alias', 'field', ['value' => 'myValue']);
     }
 
     public function testApplyMethod(): void
     {
-        $builder = new ProxyQuery($this->createQueryBuilderStub());
+        $proxyQuery = new ProxyQuery($this->createQueryBuilderStub());
 
         $filter = new CallbackFilter();
         $filter->initialize('field_name_test', [
-            'callback' => static function ($builder, $alias, $field, $value) {
-                $builder->andWhere(sprintf('CUSTOM QUERY %s.%s', $alias, $field));
-                $builder->setParameter('value', $value['value']);
+            'callback' => static function (ProxyQueryInterface $query, string $alias, string $field, array $data): bool {
+                $query->getQueryBuilder()->andWhere(sprintf('CUSTOM QUERY %s.%s', $alias, $field));
+                $query->getQueryBuilder()->setParameter('value', $data['value']);
 
                 return true;
             },
             'field_name' => 'field_name_test',
         ]);
 
-        $filter->apply($builder, ['value' => 'myValue']);
+        $filter->apply($proxyQuery, ['value' => 'myValue']);
 
-        $this->assertSame(['CUSTOM QUERY o.field_name_test'], $builder->query);
-        $this->assertSame(['value' => 'myValue'], $builder->queryParameters);
+        $this->assertSameQuery(['WHERE CUSTOM QUERY o.field_name_test'], $proxyQuery);
+        $this->assertSameQueryParameters(['value' => 'myValue'], $proxyQuery);
         $this->assertTrue($filter->isActive());
-    }
-
-    /**
-     * NEXT_MAJOR: Remove this method.
-     *
-     * @group legacy
-     */
-    public function testWrongCallbackReturnType(): void
-    {
-        $builder = new ProxyQuery($this->createQueryBuilderStub());
-
-        $filter = new CallbackFilter();
-        $filter->initialize('field_name', [
-            'callback' => static function ($builder, $alias, $field, $value) {
-                $builder->andWhere(sprintf('CUSTOM QUERY %s.%s', $alias, $field));
-                $builder->setParameter('value', $value);
-
-                return 1;
-            },
-        ]);
-
-        $this->expectDeprecation(
-            'Using another return type than boolean for the callback option is deprecated'
-            .' since sonata-project/doctrine-orm-admin-bundle 3.25 and will throw an exception in version 4.0.'
-        );
-        $filter->filter($builder, 'alias', 'field', 'myValue');
-
-        $this->assertSame(['CUSTOM QUERY alias.field'], $builder->query);
-        $this->assertSame(['value' => 'myValue'], $builder->queryParameters);
     }
 }

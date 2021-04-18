@@ -20,7 +20,10 @@ use Symfony\Component\DependencyInjection\Definition;
 
 class AddAuditEntityCompilerPassTest extends TestCase
 {
-    public function processDataProvider()
+    /**
+     * @phpstan-return iterable<array{bool, array<string, array{audit: bool|null, audited: bool}>}>
+     */
+    public function processDataProvider(): iterable
     {
         return [
             [true, [
@@ -37,9 +40,11 @@ class AddAuditEntityCompilerPassTest extends TestCase
     }
 
     /**
+     * @phpstan-param array<string, array{audit: bool|null, audited: bool}> $services
+     *
      * @dataProvider processDataProvider
      */
-    public function testProcess($force, array $services): void
+    public function testProcess(bool $force, array $services): void
     {
         $container = $this->createMock(ContainerBuilder::class);
 
@@ -50,8 +55,7 @@ class AddAuditEntityCompilerPassTest extends TestCase
                 if ('simplethings_entityaudit.config' === $id) {
                     return true;
                 }
-            })
-        ;
+            });
 
         $container
             ->expects($this->any())
@@ -64,8 +68,7 @@ class AddAuditEntityCompilerPassTest extends TestCase
                 if ('simplethings.entityaudit.audited_entities' === $id) {
                     return [];
                 }
-            })
-        ;
+            });
 
         $container
             ->expects($this->any())
@@ -86,16 +89,14 @@ class AddAuditEntityCompilerPassTest extends TestCase
 
                     return $tags;
                 }
-            })
-        ;
+            });
 
         $container
             ->expects($this->any())
             ->method('getDefinition')
             ->willReturnCallback(static function ($id) {
                 return new Definition(null, [null, $id]);
-            })
-        ;
+            });
 
         $expectedAuditedEntities = [];
 
@@ -108,8 +109,7 @@ class AddAuditEntityCompilerPassTest extends TestCase
         $container
             ->expects($this->once())
             ->method('setParameter')
-            ->with('simplethings.entityaudit.audited_entities', $expectedAuditedEntities)
-        ;
+            ->with('simplethings.entityaudit.audited_entities', $expectedAuditedEntities);
 
         $compilerPass = new AddAuditEntityCompilerPass();
         $compilerPass->process($container);

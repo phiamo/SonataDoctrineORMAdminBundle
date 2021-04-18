@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 /*
  * This file is part of the Sonata Project package.
  *
@@ -22,11 +24,15 @@ class Product
      * @ORM\Column(name="id", type="integer")
      * @ORM\Id
      * @ORM\GeneratedValue(strategy="AUTO")
+     *
+     * @var int|null
      */
     private $id;
 
     /**
      * @ORM\OneToMany(targetEntity="StoreProduct", mappedBy="product")
+     *
+     * @var StoreProduct[]
      */
     private $products;
 }

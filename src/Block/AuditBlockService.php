@@ -21,16 +21,14 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
 use Twig\Environment;
 
 /**
- * @final since sonata-project/doctrine-orm-admin-bundle 3.22
- *
  * @author Thomas Rabaix <thomas.rabaix@sonata-project.org>
  */
-class AuditBlockService extends AbstractBlockService
+final class AuditBlockService extends AbstractBlockService
 {
     /**
      * @var AuditReader
      */
-    protected $auditReader;
+    private $auditReader;
 
     public function __construct(Environment $twig, AuditReader $auditReader)
     {
@@ -41,16 +39,21 @@ class AuditBlockService extends AbstractBlockService
 
     public function execute(BlockContextInterface $blockContext, ?Response $response = null): Response
     {
+        $template = $blockContext->getTemplate();
+        \assert(null !== $template);
+        $limit = $blockContext->getSetting('limit');
+        \assert(\is_int($limit));
+
         $revisions = [];
 
-        foreach ($this->auditReader->findRevisionHistory($blockContext->getSetting('limit'), 0) as $revision) {
+        foreach ($this->auditReader->findRevisionHistory($limit, 0) as $revision) {
             $revisions[] = [
                 'revision' => $revision,
                 'entities' => $this->auditReader->findEntitiesChangedAtRevision($revision->getRev()),
             ];
         }
 
-        return $this->renderResponse($blockContext->getTemplate(), [
+        return $this->renderResponse($template, [
             'block' => $blockContext->getBlock(),
             'settings' => $blockContext->getSettings(),
             'revisions' => $revisions,

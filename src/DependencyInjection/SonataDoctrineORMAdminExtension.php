@@ -20,12 +20,10 @@ use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader\XmlFileLoader;
 
 /**
- * @final since sonata-project/doctrine-orm-admin-bundle 3.24
- *
  * @author Thomas Rabaix <thomas.rabaix@sonata-project.org>
  * @author Michael Williams <michael.williams@funsational.com>
  */
-class SonataDoctrineORMAdminExtension extends AbstractSonataAdminExtension
+final class SonataDoctrineORMAdminExtension extends AbstractSonataAdminExtension
 {
     public function load(array $configs, ContainerBuilder $container): void
     {
@@ -40,6 +38,7 @@ class SonataDoctrineORMAdminExtension extends AbstractSonataAdminExtension
         $loader->load('doctrine_orm_filter_types.xml');
 
         $bundles = $container->getParameter('kernel.bundles');
+        \assert(\is_array($bundles));
 
         if (isset($bundles['SimpleThingsEntityAuditBundle'])) {
             $loader->load('audit.xml');

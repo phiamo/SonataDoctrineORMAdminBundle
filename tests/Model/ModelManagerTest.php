@@ -18,38 +18,29 @@ use Doctrine\DBAL\DBALException;
 use Doctrine\DBAL\Platforms\MySqlPlatform;
 use Doctrine\DBAL\Platforms\PostgreSqlPlatform;
 use Doctrine\DBAL\Types\Type;
-use Doctrine\ORM\Configuration;
-use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Mapping\ClassMetadata;
-use Doctrine\ORM\Mapping\ClassMetadataFactory;
-use Doctrine\ORM\Mapping\ClassMetadataInfo;
 use Doctrine\ORM\OptimisticLockException;
-use Doctrine\ORM\Query;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
-use Sonata\AdminBundle\Datagrid\DatagridInterface;
-use Sonata\AdminBundle\Datagrid\ProxyQueryInterface;
 use Sonata\AdminBundle\Exception\LockException;
 use Sonata\AdminBundle\Exception\ModelManagerException;
-use Sonata\DoctrineORMAdminBundle\Datagrid\OrderByToSelectWalker;
 use Sonata\DoctrineORMAdminBundle\Datagrid\ProxyQuery;
+use Sonata\DoctrineORMAdminBundle\Datagrid\ProxyQueryInterface;
 use Sonata\DoctrineORMAdminBundle\Model\ModelManager;
 use Sonata\DoctrineORMAdminBundle\Tests\Fixtures\DoctrineType\ProductIdType;
 use Sonata\DoctrineORMAdminBundle\Tests\Fixtures\DoctrineType\UuidBinaryType;
 use Sonata\DoctrineORMAdminBundle\Tests\Fixtures\DoctrineType\UuidType;
 use Sonata\DoctrineORMAdminBundle\Tests\Fixtures\DoctrineType\ValueObjectWithMagicToStringImpl;
 use Sonata\DoctrineORMAdminBundle\Tests\Fixtures\DoctrineType\ValueObjectWithToStringImpl;
-use Sonata\DoctrineORMAdminBundle\Tests\Fixtures\Entity\AbstractEntity;
 use Sonata\DoctrineORMAdminBundle\Tests\Fixtures\Entity\AssociatedEntity;
 use Sonata\DoctrineORMAdminBundle\Tests\Fixtures\Entity\ContainerEntity;
 use Sonata\DoctrineORMAdminBundle\Tests\Fixtures\Entity\Embeddable\EmbeddedEntity;
 use Sonata\DoctrineORMAdminBundle\Tests\Fixtures\Entity\Embeddable\SubEmbeddedEntity;
 use Sonata\DoctrineORMAdminBundle\Tests\Fixtures\Entity\Product;
 use Sonata\DoctrineORMAdminBundle\Tests\Fixtures\Entity\ProductId;
-use Sonata\DoctrineORMAdminBundle\Tests\Fixtures\Entity\ProtectedEntity;
 use Sonata\DoctrineORMAdminBundle\Tests\Fixtures\Entity\SimpleEntity;
 use Sonata\DoctrineORMAdminBundle\Tests\Fixtures\Entity\UuidBinaryEntity;
 use Sonata\DoctrineORMAdminBundle\Tests\Fixtures\Entity\UuidEntity;
@@ -63,7 +54,7 @@ final class ModelManagerTest extends TestCase
     use ExpectDeprecationTrait;
 
     /**
-     * @var ManagerRegistry|MockObject
+     * @var ManagerRegistry&MockObject
      */
     private $registry;
 
@@ -91,7 +82,10 @@ final class ModelManagerTest extends TestCase
         $this->modelManager = new ModelManager($this->registry, PropertyAccess::createPropertyAccessor());
     }
 
-    public function valueObjectDataProvider(): array
+    /**
+     * @phpstan-return iterable<array{class-string}>
+     */
+    public function valueObjectDataProvider(): iterable
     {
         return [
             'value object with toString implementation' => [ValueObjectWithToStringImpl::class],
@@ -111,15 +105,12 @@ final class ModelManagerTest extends TestCase
         $connection = $this->createMock(Connection::class);
         $connection->method('getDatabasePlatform')->willReturn($platform);
 
-        $classMetadata = $this->createMock(ClassMetadataInfo::class);
+        $classMetadata = $this->createMock(ClassMetadata::class);
         $classMetadata->method('getIdentifierValues')->willReturn([$entity->getId()]);
         $classMetadata->method('getTypeOfField')->willReturn(UuidBinaryType::NAME);
 
-        $classMetadataFactory = $this->createMock(ClassMetadataFactory::class);
-        $classMetadataFactory->method('getMetadataFor')->willReturn($classMetadata);
-
-        $entityManager = $this->createMock(EntityManager::class);
-        $entityManager->method('getMetadataFactory')->willReturn($classMetadataFactory);
+        $entityManager = $this->createMock(EntityManagerInterface::class);
+        $entityManager->method('getClassMetadata')->willReturn($classMetadata);
         $entityManager->method('getConnection')->willReturn($connection);
 
         $this->registry->method('getManagerForClass')->willReturn($entityManager);
@@ -136,10 +127,9 @@ final class ModelManagerTest extends TestCase
 
         $this->registry->expects($this->once())
             ->method('getManagerForClass')
-            ->with('x')
-            ->willReturn($em)
-        ;
-        $this->assertSame($em, $this->modelManager->getEntityManager('x'));
+            ->with(\stdClass::class)
+            ->willReturn($em);
+        $this->assertSame($em, $this->modelManager->getEntityManager(\stdClass::class));
     }
 
     /**
@@ -150,14 +140,20 @@ final class ModelManagerTest extends TestCase
         $this->assertSame($expected, $this->modelManager->supportsQuery($object));
     }
 
+    /**
+     * @phpstan-return iterable<array{bool, object}>
+     */
     public function supportsQueryDataProvider(): iterable
     {
-        yield [true, $this->createMock(ProxyQuery::class)];
+        yield [true, new ProxyQuery($this->createMock(QueryBuilder::class))];
         yield [true, $this->createMock(QueryBuilder::class)];
         yield [false, new \stdClass()];
     }
 
-    public function getVersionDataProvider(): array
+    /**
+     * @phpstan-return iterable<array{bool}>
+     */
+    public function getVersionDataProvider(): iterable
     {
         return [
             [true],
@@ -168,31 +164,25 @@ final class ModelManagerTest extends TestCase
     /**
      * @dataProvider getVersionDataProvider
      */
-    public function testGetVersion($isVersioned): void
+    public function testGetVersion(bool $isVersioned): void
     {
         $object = new VersionedEntity();
 
-        $modelManager = $this->getMockBuilder(ModelManager::class)
-            ->disableOriginalConstructor()
-            ->setMethods(['getMetadata'])
-            ->getMock();
-
-        $metadata = $this->getMetadata(\get_class($object), $isVersioned);
-
-        $modelManager->expects($this->any())
-            ->method('getMetadata')
-            ->willReturn($metadata);
+        $this->setGetMetadataExpectation(\get_class($object), $this->getMetadata(\get_class($object), $isVersioned));
 
         if ($isVersioned) {
             $object->version = 123;
 
-            $this->assertNotNull($modelManager->getLockVersion($object));
+            $this->assertNotNull($this->modelManager->getLockVersion($object));
         } else {
-            $this->assertNull($modelManager->getLockVersion($object));
+            $this->assertNull($this->modelManager->getLockVersion($object));
         }
     }
 
-    public function lockDataProvider(): array
+    /**
+     * @phpstan-return iterable<array{bool, bool}>
+     */
+    public function lockDataProvider(): iterable
     {
         return [
             [true,  false],
@@ -204,29 +194,13 @@ final class ModelManagerTest extends TestCase
     /**
      * @dataProvider lockDataProvider
      */
-    public function testLock($isVersioned, $expectsException): void
+    public function testLock(bool $isVersioned, bool $expectsException): void
     {
         $object = new VersionedEntity();
 
-        $em = $this->getMockBuilder(EntityManager::class)
-            ->disableOriginalConstructor()
-            ->setMethods(['lock'])
-            ->getMock();
-
-        $modelManager = $this->getMockBuilder(ModelManager::class)
-            ->disableOriginalConstructor()
-            ->setMethods(['getMetadata', 'getEntityManager'])
-            ->getMock();
-
-        $modelManager->expects($this->any())
-            ->method('getEntityManager')
-            ->willReturn($em);
-
         $metadata = $this->getMetadata(\get_class($object), $isVersioned);
 
-        $modelManager->expects($this->any())
-            ->method('getMetadata')
-            ->willReturn($metadata);
+        $em = $this->setGetMetadataExpectation(\get_class($object), $metadata);
 
         $em->expects($isVersioned ? $this->once() : $this->never())
             ->method('lock');
@@ -239,68 +213,10 @@ final class ModelManagerTest extends TestCase
             $this->expectException(LockException::class);
         }
 
-        $modelManager->lock($object, 123);
+        $this->modelManager->lock($object, 123);
     }
 
-    public function testGetParentMetadataForProperty(): void
-    {
-        $containerEntityClass = ContainerEntity::class;
-        $associatedEntityClass = AssociatedEntity::class;
-        $embeddedEntityClass = EmbeddedEntity::class;
-        $modelManagerClass = ModelManager::class;
-
-        $em = $this->createMock(EntityManager::class);
-
-        /** @var MockObject|ModelManager $modelManager */
-        $modelManager = $this->getMockBuilder($modelManagerClass)
-            ->disableOriginalConstructor()
-            ->setMethods(['getMetadata', 'getEntityManager'])
-            ->getMock();
-
-        $modelManager->expects($this->any())
-            ->method('getEntityManager')
-            ->willReturn($em);
-
-        $containerEntityMetadata = $this->getMetadataForContainerEntity();
-        $associatedEntityMetadata = $this->getMetadataForAssociatedEntity();
-        $embeddedEntityMetadata = $this->getMetadataForEmbeddedEntity();
-
-        $modelManager->expects($this->any())->method('getMetadata')
-            ->willReturnMap(
-                [
-                    // NEXT_MAJOR: Remove the 'sonata_deprecation_mute'
-                    [$containerEntityClass, 'sonata_deprecation_mute', $containerEntityMetadata],
-                    [$embeddedEntityClass, 'sonata_deprecation_mute', $embeddedEntityMetadata],
-                    [$associatedEntityClass, 'sonata_deprecation_mute', $associatedEntityMetadata],
-                ]
-            );
-
-        /** @var ClassMetadata $metadata */
-        [$metadata, $lastPropertyName] = $modelManager
-            ->getParentMetadataForProperty($containerEntityClass, 'plainField');
-        $this->assertSame($metadata->fieldMappings[$lastPropertyName]['type'], 'integer');
-
-        [$metadata, $lastPropertyName] = $modelManager
-            ->getParentMetadataForProperty($containerEntityClass, 'associatedEntity.plainField');
-        $this->assertSame($metadata->fieldMappings[$lastPropertyName]['type'], 'string');
-
-        [$metadata, $lastPropertyName] = $modelManager
-            ->getParentMetadataForProperty($containerEntityClass, 'embeddedEntity.plainField');
-        $this->assertSame($metadata->fieldMappings[$lastPropertyName]['type'], 'boolean');
-
-        [$metadata, $lastPropertyName] = $modelManager
-            ->getParentMetadataForProperty($containerEntityClass, 'associatedEntity.embeddedEntity.plainField');
-        $this->assertSame($metadata->fieldMappings[$lastPropertyName]['type'], 'boolean');
-
-        [$metadata, $lastPropertyName] = $modelManager
-            ->getParentMetadataForProperty(
-                $containerEntityClass,
-                'associatedEntity.embeddedEntity.subEmbeddedEntity.plainField'
-            );
-        $this->assertSame($metadata->fieldMappings[$lastPropertyName]['type'], 'boolean');
-    }
-
-    public function getMetadataForEmbeddedEntity()
+    public function getMetadataForEmbeddedEntity(): ClassMetadata
     {
         $metadata = new ClassMetadata(EmbeddedEntity::class);
 
@@ -315,7 +231,7 @@ final class ModelManagerTest extends TestCase
         return $metadata;
     }
 
-    public function getMetadataForSubEmbeddedEntity()
+    public function getMetadataForSubEmbeddedEntity(): ClassMetadata
     {
         $metadata = new ClassMetadata(SubEmbeddedEntity::class);
 
@@ -330,7 +246,7 @@ final class ModelManagerTest extends TestCase
         return $metadata;
     }
 
-    public function getMetadataForAssociatedEntity()
+    public function getMetadataForAssociatedEntity(): ClassMetadata
     {
         $embeddedEntityClass = EmbeddedEntity::class;
         $subEmbeddedEntityClass = SubEmbeddedEntity::class;
@@ -362,7 +278,7 @@ final class ModelManagerTest extends TestCase
         return $metadata;
     }
 
-    public function getMetadataForContainerEntity()
+    public function getMetadataForContainerEntity(): ClassMetadata
     {
         $containerEntityClass = ContainerEntity::class;
         $associatedEntityClass = AssociatedEntity::class;
@@ -416,11 +332,6 @@ final class ModelManagerTest extends TestCase
             ->method('getTypeOfField')
             ->willReturn(UuidBinaryType::NAME); //'uuid_binary'
 
-        $mf = $this->createMock(ClassMetadataFactory::class);
-        $mf->expects($this->any())
-            ->method('getMetadataFor')
-            ->willReturn($meta);
-
         $platform = $this->createMock(PostgreSqlPlatform::class);
         $platform->expects($this->any())
             ->method('hasDoctrineTypeMappingFor')
@@ -436,10 +347,10 @@ final class ModelManagerTest extends TestCase
             ->method('getDatabasePlatform')
             ->willReturn($platform);
 
-        $em = $this->createMock(EntityManager::class);
+        $em = $this->createMock(EntityManagerInterface::class);
         $em->expects($this->any())
-            ->method('getMetadataFactory')
-            ->willReturn($mf);
+            ->method('getClassMetadata')
+            ->willReturn($meta);
         $em->expects($this->any())
             ->method('getConnection')
             ->willReturn($conn);
@@ -466,11 +377,6 @@ final class ModelManagerTest extends TestCase
             ->method('getTypeOfField')
             ->willReturn(UuidType::NAME);
 
-        $mf = $this->createMock(ClassMetadataFactory::class);
-        $mf->expects($this->any())
-            ->method('getMetadataFor')
-            ->willReturn($meta);
-
         $platform = $this->createMock(PostgreSqlPlatform::class);
         $platform->expects($this->any())
             ->method('hasDoctrineTypeMappingFor')
@@ -484,10 +390,10 @@ final class ModelManagerTest extends TestCase
             ->method('getDatabasePlatform')
             ->willReturn($platform);
 
-        $em = $this->createMock(EntityManager::class);
+        $em = $this->createMock(EntityManagerInterface::class);
         $em->expects($this->any())
-            ->method('getMetadataFactory')
-            ->willReturn($mf);
+            ->method('getClassMetadata')
+            ->willReturn($meta);
         $em->expects($this->any())
             ->method('getConnection')
             ->willReturn($conn);
@@ -514,11 +420,6 @@ final class ModelManagerTest extends TestCase
             ->method('getTypeOfField')
             ->willReturn(ProductIdType::NAME);
 
-        $mf = $this->createMock(ClassMetadataFactory::class);
-        $mf->expects($this->any())
-            ->method('getMetadataFor')
-            ->willReturn($meta);
-
         $platform = $this->createMock(PostgreSqlPlatform::class);
         $platform->expects($this->any())
             ->method('hasDoctrineTypeMappingFor')
@@ -532,10 +433,10 @@ final class ModelManagerTest extends TestCase
             ->method('getDatabasePlatform')
             ->willReturn($platform);
 
-        $em = $this->createMock(EntityManager::class);
+        $em = $this->createMock(EntityManagerInterface::class);
         $em->expects($this->any())
-            ->method('getMetadataFactory')
-            ->willReturn($mf);
+            ->method('getClassMetadata')
+            ->willReturn($meta);
         $em->expects($this->any())
             ->method('getConnection')
             ->willReturn($conn);
@@ -551,7 +452,7 @@ final class ModelManagerTest extends TestCase
 
     public function testAssociationIdentifierType(): void
     {
-        $entity = new ContainerEntity(new AssociatedEntity(42, new EmbeddedEntity()), new EmbeddedEntity());
+        $entity = new ContainerEntity(new AssociatedEntity(new EmbeddedEntity(), 42), new EmbeddedEntity());
 
         $meta = $this->createMock(ClassMetadata::class);
         $meta->expects($this->any())
@@ -560,11 +461,6 @@ final class ModelManagerTest extends TestCase
         $meta->expects($this->any())
             ->method('getTypeOfField')
             ->willReturn(null);
-
-        $mf = $this->createMock(ClassMetadataFactory::class);
-        $mf->expects($this->any())
-            ->method('getMetadataFor')
-            ->willReturn($meta);
 
         $platform = $this->createMock(PostgreSqlPlatform::class);
         $platform->expects($this->never())
@@ -575,10 +471,10 @@ final class ModelManagerTest extends TestCase
             ->method('getDatabasePlatform')
             ->willReturn($platform);
 
-        $em = $this->createMock(EntityManager::class);
+        $em = $this->createMock(EntityManagerInterface::class);
         $em->expects($this->any())
-            ->method('getMetadataFactory')
-            ->willReturn($mf);
+            ->method('getClassMetadata')
+            ->willReturn($meta);
         $em->expects($this->any())
             ->method('getConnection')
             ->willReturn($conn);
@@ -592,105 +488,18 @@ final class ModelManagerTest extends TestCase
         $this->assertSame(42, $result[0]);
     }
 
-    /**
-     * NEXT_MAJOR: Remove this dataprovider.
-     *
-     * [sortBy, sortOrder, isAddOrderBy].
-     */
-    public function getSortableInDataSourceIteratorDataProvider(): array
+    public function testReverseTransform(): void
     {
-        return [
-            [null, null, false],
-            ['', 'ASC', false],
-            ['field', 'ASC', true],
-            ['field', null, true],
-        ];
-    }
-
-    /**
-     * NEXT_MAJOR: Remove this test.
-     *
-     * @group legacy
-     *
-     * @dataProvider getSortableInDataSourceIteratorDataProvider
-     *
-     * @param string|null $sortBy
-     * @param string|null $sortOrder
-     * @param bool        $isAddOrderBy
-     */
-    public function testSortableInDataSourceIterator($sortBy, $sortOrder, $isAddOrderBy): void
-    {
-        $datagrid = $this->getMockForAbstractClass(DatagridInterface::class);
-        $configuration = $this->getMockBuilder(Configuration::class)->getMock();
-        $configuration->expects($this->any())
-            ->method('getDefaultQueryHints')
-            ->willReturn([]);
-
-        $em = $this->getMockBuilder(EntityManager::class)
-            ->disableOriginalConstructor()
-            ->getMock();
-
-        $em->expects($this->any())
-            ->method('getConfiguration')
-            ->willReturn($configuration);
-
-        $queryBuilder = $this->getMockBuilder(QueryBuilder::class)
-            ->setConstructorArgs([$em])
-            ->getMock();
-        $query = new Query($em);
-
-        $proxyQuery = $this->getMockBuilder(ProxyQuery::class)
-            ->setConstructorArgs([$queryBuilder])
-            ->setMethods(['getSortBy', 'getSortOrder', 'getRootAliases'])
-            ->getMock();
-
-        $proxyQuery->expects($this->any())
-            ->method('getSortOrder')
-            ->willReturn($sortOrder);
-
-        $proxyQuery->expects($this->any())
-            ->method('getSortBy')
-            ->willReturn($sortBy);
-
-        $queryBuilder->expects($isAddOrderBy ? $this->atLeastOnce() : $this->never())
-            ->method('addOrderBy');
-
-        $proxyQuery->expects($this->any())
-            ->method('getRootAliases')
-            ->willReturn(['a']);
-
-        $queryBuilder->expects($this->any())
-            ->method('getQuery')
-            ->willReturn($query);
-
-        $datagrid->expects($this->any())
-            ->method('getQuery')
-            ->willReturn($proxyQuery);
-
-        $this->expectDeprecation('Method Sonata\DoctrineORMAdminBundle\Model\ModelManager::getDataSourceIterator() is deprecated since sonata-project/doctrine-orm-admin-bundle 3.27 and will be removed in 4.0.');
-        $this->modelManager->getDataSourceIterator($datagrid, []);
-
-        if ($isAddOrderBy) {
-            $this->assertArrayHasKey($key = 'doctrine.customTreeWalkers', $hints = $query->getHints());
-            $this->assertContains(OrderByToSelectWalker::class, $hints[$key]);
-        }
-    }
-
-    public function testModelReverseTransform(): void
-    {
+        $object = new SimpleEntity();
         $class = SimpleEntity::class;
 
-        $metadataFactory = $this->createMock(ClassMetadataFactory::class);
         $objectManager = $this->createMock(EntityManagerInterface::class);
 
         $classMetadata = new ClassMetadata($class);
         $classMetadata->reflClass = new \ReflectionClass($class);
 
         $objectManager->expects($this->once())
-            ->method('getMetadataFactory')
-            ->willReturn($metadataFactory);
-        $metadataFactory->expects($this->once())
-            ->method('getMetadataFor')
+            ->method('getClassMetadata')
             ->with($class)
             ->willReturn($classMetadata);
         $this->registry->expects($this->once())
@@ -698,42 +507,12 @@ final class ModelManagerTest extends TestCase
             ->with($class)
             ->willReturn($objectManager);
 
-        $this->assertInstanceOf($class, $object = $this->modelManager->modelReverseTransform(
-            $class,
-            [
-                'schmeckles' => 42,
-                'multi_word_property' => 'hello',
-            ]
-        ));
+        $this->modelManager->reverseTransform($object, [
+            'schmeckles' => 42,
+            'multi_word_property' => 'hello',
+        ]);
         $this->assertSame(42, $object->getSchmeckles());
         $this->assertSame('hello', $object->getMultiWordProperty());
-    }
-
-    /**
-     * NEXT_MAJOR: Remove this test.
-     *
-     * @group legacy
-     */
-    public function testModelTransform(): void
-    {
-        $this->expectDeprecation('Method Sonata\DoctrineORMAdminBundle\Model\ModelManager::modelTransform() is deprecated since sonata-project/doctrine-orm-admin-bundle 3.27 and will be removed in version 4.0.');
-
-        $object = new \stdClass();
-        $result = $this->modelManager->modelTransform('thisIsNotUsed', $object);
-
-        $this->assertSame($object, $result);
-    }
-
-    public function testGetModelInstanceException(): void
-    {
-        $this->expectException(\RuntimeException::class);
-
-        $this->modelManager->getModelInstance(AbstractEntity::class);
-    }
-
-    public function testGetModelInstanceForProtectedEntity(): void
-    {
-        $this->assertInstanceOf(ProtectedEntity::class, $this->modelManager->getModelInstance(ProtectedEntity::class));
     }
 
     public function testGetEntityManagerException(): void
@@ -743,60 +522,12 @@ final class ModelManagerTest extends TestCase
         $this->modelManager->getEntityManager(VersionedEntity::class);
     }
 
-    public function testGetNewFieldDescriptionInstance(): void
-    {
-        $modelManager = $this->getMockBuilder(ModelManager::class)
-            ->disableOriginalConstructor()
-            ->onlyMethods(['getParentMetadataForProperty'])
-            ->getMock();
-
-        $modelManager->method('getParentMetadataForProperty')->willReturn([
-            $classMetadata = new ClassMetadata(\stdClass::class),
-            'property',
-            [],
-        ]);
-
-        $fieldDescription = $modelManager->getNewFieldDescriptionInstance(\stdClass::class, 'name', []);
-        $options = $fieldDescription->getOptions();
-
-        $this->assertSame([
-            'route' => ['name' => 'show', 'parameters' => []],
-            'placeholder' => 'short_object_description_placeholder',
-            'link_parameters' => [],
-        ], $options);
-    }
-
-    public function testGetNewFieldDescriptionInstanceWithOptions(): void
-    {
-        $modelManager = $this->getMockBuilder(ModelManager::class)
-            ->disableOriginalConstructor()
-            ->onlyMethods(['getParentMetadataForProperty'])
-            ->getMock();
-
-        $modelManager->method('getParentMetadataForProperty')->willReturn([
-            $classMetadata = new ClassMetadata(\stdClass::class),
-            'property',
-            [],
-        ]);
-
-        $fieldDescription = $modelManager->getNewFieldDescriptionInstance(\stdClass::class, 'name', [
-            'route' => ['name' => 'edit', 'parameters' => ['foo' => 'bar']],
-        ]);
-        $options = $fieldDescription->getOptions();
-
-        $this->assertSame([
-            'route' => ['name' => 'edit', 'parameters' => ['foo' => 'bar']],
-            'placeholder' => 'short_object_description_placeholder',
-            'link_parameters' => [],
-        ], $options);
-    }
-
     /**
      * @dataProvider createUpdateRemoveData
      */
-    public function testCreate($exception): void
+    public function testCreate(\Throwable $exception): void
     {
-        $entityManger = $this->createMock(EntityManager::class);
+        $entityManger = $this->createMock(EntityManagerInterface::class);
 
         $this->registry->expects($this->once())
             ->method('getManagerForClass')
@@ -814,7 +545,10 @@ final class ModelManagerTest extends TestCase
         $this->modelManager->create(new VersionedEntity());
     }
 
-    public function createUpdateRemoveData(): array
+    /**
+     * @phpstan-return iterable<array{\Throwable}>
+     */
+    public function createUpdateRemoveData(): iterable
     {
         return [
             'PDOException' => [
@@ -829,9 +563,9 @@ final class ModelManagerTest extends TestCase
     /**
      * @dataProvider createUpdateRemoveData
      */
-    public function testUpdate($exception): void
+    public function testUpdate(\Throwable $exception): void
     {
-        $entityManger = $this->createMock(EntityManager::class);
+        $entityManger = $this->createMock(EntityManagerInterface::class);
 
         $this->registry->expects($this->once())
             ->method('getManagerForClass')
@@ -852,9 +586,9 @@ final class ModelManagerTest extends TestCase
     /**
      * @dataProvider createUpdateRemoveData
      */
-    public function testRemove($exception): void
+    public function testRemove(\Throwable $exception): void
     {
-        $entityManger = $this->createMock(EntityManager::class);
+        $entityManger = $this->createMock(EntityManagerInterface::class);
 
         $this->registry->expects($this->once())
             ->method('getManagerForClass')
@@ -873,33 +607,17 @@ final class ModelManagerTest extends TestCase
     }
 
     /**
-     * NEXT_MAJOR: Remove this method.
+     * @param string[]          $expectedParameters
+     * @param string[]          $identifierFieldNames
+     * @param array<int|string> $ids
      *
-     * @group legacy
-     *
-     * @expectedDeprecation Passing null as argument 1 for Sonata\DoctrineORMAdminBundle\Model\ModelManager::find() is deprecated since sonata-project/doctrine-orm-admin-bundle 3.20 and will be not allowed in version 4.0.
-     */
-    public function testFindBadId(): void
-    {
-        $this->assertNull($this->modelManager->find('notImportant', null));
-    }
-
-    /**
      * @dataProvider addIdentifiersToQueryProvider
+     *
+     * @phpstan-param non-empty-array<int|string> $ids
      */
     public function testAddIdentifiersToQuery(array $expectedParameters, array $identifierFieldNames, array $ids): void
     {
-        $modelManager = $this->getMockBuilder(ModelManager::class)
-            ->disableOriginalConstructor()
-            ->setMethods(['getIdentifierFieldNames'])
-            ->getMock();
-
-        $modelManager
-            ->expects($this->once())
-            ->method('getIdentifierFieldNames')
-            ->willReturn($identifierFieldNames);
-
-        $em = $this->getMockBuilder(EntityManager::class)
+        $em = $this->getMockBuilder(EntityManagerInterface::class)
             ->disableOriginalConstructor()
             ->getMock();
 
@@ -918,20 +636,26 @@ final class ModelManagerTest extends TestCase
             ->method('andWhere')
             ->with($this->stringContains(sprintf('( p.%s = :field_', $identifierFieldNames[0])));
 
-        $proxyQuery = $this->getMockBuilder(ProxyQuery::class)
-            ->setConstructorArgs([$queryBuilder])
-            ->setMethods(['getSortBy'])
-            ->getMock();
+        $proxyQuery = new ProxyQuery($queryBuilder);
 
-        $modelManager->addIdentifiersToQuery(Product::class, $proxyQuery, $ids);
+        $metadata = $this->createMock(ClassMetadata::class);
+        $metadata->expects($this->once())
+            ->method('getIdentifierFieldNames')
+            ->willReturn($identifierFieldNames);
+        $this->setGetMetadataExpectation(Product::class, $metadata);
 
-        $this->assertCount(\count($expectedParameters), $proxyQuery->getParameters());
+        $this->modelManager->addIdentifiersToQuery(Product::class, $proxyQuery, $ids);
+
+        $this->assertCount(\count($expectedParameters), $proxyQuery->getQueryBuilder()->getParameters());
 
         foreach ($proxyQuery->getParameters() as $offset => $parameter) {
             $this->assertSame($expectedParameters[$offset], $parameter->getValue());
         }
     }
 
+    /**
+     * @phpstan-return iterable<array{string[], string[], array<int|string>}>
+     */
     public function addIdentifiersToQueryProvider(): iterable
     {
         yield [['1', '2'], ['id'], [1, 2]];
@@ -973,6 +697,7 @@ final class ModelManagerTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Array passed as argument 3 to "Sonata\DoctrineORMAdminBundle\Model\ModelManager::addIdentifiersToQuery()" must not be empty.');
 
+        // @phpstan-ignore-next-line
         $this->modelManager->addIdentifiersToQuery(\stdClass::class, $datagrid, []);
     }
 
@@ -989,5 +714,23 @@ final class ModelManagerTest extends TestCase
         }
 
         return $metadata;
+    }
+
+    /**
+     * @return EntityManagerInterface&MockObject
+     */
+    private function setGetMetadataExpectation(string $class, ClassMetadata $classMetadata): EntityManagerInterface
+    {
+        $em = $this->createMock(EntityManagerInterface::class);
+        $this->registry->expects($this->atLeastOnce())
+            ->method('getManagerForClass')
+            ->with($class)
+            ->willReturn($em);
+
+        $em->expects($this->atLeastOnce())
+            ->method('getClassMetadata')
+            ->willReturn($classMetadata);
+
+        return $em;
     }
 }

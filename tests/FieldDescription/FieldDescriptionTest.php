@@ -11,14 +11,14 @@ declare(strict_types=1);
  * file that was distributed with this source code.
  */
 
-namespace Sonata\DoctrineORMAdminBundle\Tests\Admin;
+namespace Sonata\DoctrineORMAdminBundle\Tests\FieldDescription;
 
+use Doctrine\ORM\Mapping\ClassMetadata;
 use PHPUnit\Framework\TestCase;
-use Sonata\AdminBundle\Admin\AbstractAdmin;
 use Sonata\AdminBundle\Admin\AdminInterface;
-use Sonata\AdminBundle\Admin\FieldDescriptionInterface;
 use Sonata\AdminBundle\Exception\NoValueException;
-use Sonata\DoctrineORMAdminBundle\Admin\FieldDescription;
+use Sonata\AdminBundle\FieldDescription\FieldDescriptionInterface;
+use Sonata\DoctrineORMAdminBundle\FieldDescription\FieldDescription;
 
 class FieldDescriptionTest extends TestCase
 {
@@ -84,29 +84,6 @@ class FieldDescriptionTest extends TestCase
         $this->assertSame($expected, $field->getOptions());
     }
 
-    public function testAssociationMapping(): void
-    {
-        $field = new FieldDescription('name', [], [], [
-            'type' => 'integer',
-            'fieldName' => 'position',
-        ]);
-
-        $this->assertSame('integer', $field->getType());
-        $this->assertSame('integer', $field->getMappingType());
-        $this->assertSame('position', $field->getFieldName());
-
-        // NEXT_MAJOR: Remove all the rest of the test.
-        // cannot overwrite defined definition
-        $field->setAssociationMapping([
-            'type' => 'overwrite?',
-            'fieldName' => 'overwritten',
-        ]);
-
-        $this->assertSame('integer', $field->getType());
-        $this->assertSame('integer', $field->getMappingType());
-        $this->assertSame('overwritten', $field->getFieldName());
-    }
-
     public function testGetParent(): void
     {
         $adminMock = $this->createMock(AdminInterface::class);
@@ -127,7 +104,7 @@ class FieldDescriptionTest extends TestCase
 
     public function testGetAssociationAdmin(): void
     {
-        $adminMock = $this->createMock(AbstractAdmin::class);
+        $adminMock = $this->createMock(AdminInterface::class);
         $adminMock->expects($this->once())
             ->method('setParentFieldDescription')
             ->with($this->isInstanceOf(FieldDescriptionInterface::class));
@@ -140,7 +117,7 @@ class FieldDescriptionTest extends TestCase
 
     public function testHasAssociationAdmin(): void
     {
-        $adminMock = $this->createMock(AbstractAdmin::class);
+        $adminMock = $this->createMock(AdminInterface::class);
         $adminMock->expects($this->once())
             ->method('setParentFieldDescription')
             ->with($this->isInstanceOf(FieldDescriptionInterface::class));
@@ -154,39 +131,43 @@ class FieldDescriptionTest extends TestCase
         $this->assertTrue($field->hasAssociationAdmin());
     }
 
-    public function testGetAssociationMapping(): void
+    public function testSetFieldMapping(): void
     {
-        $associationMapping = [
-            'type' => 'integer',
-            'fieldName' => 'position',
-        ];
-
-        $field = new FieldDescription('name', [], [], $associationMapping);
-        $this->assertSame($associationMapping, $field->getAssociationMapping());
-    }
-
-    public function testSetFieldMappingSetType(): void
-    {
-        $fieldMapping = [
-            'type' => 'integer',
-            'fieldName' => 'position',
-        ];
+        $fieldMapping = ['type' => 'integer'];
 
         $field = new FieldDescription('position', [], $fieldMapping);
 
         $this->assertSame('integer', $field->getType());
+        $this->assertSame('integer', $field->getMappingType());
+        $this->assertSame($fieldMapping, $field->getFieldMapping());
     }
 
-    public function testSetFieldMappingSetMappingType(): void
+    public function testSetAssociationMapping(): void
     {
-        $fieldMapping = [
-            'type' => 'integer',
-            'fieldName' => 'position',
-        ];
+        $associationMapping = ['type' => 'integer'];
 
-        $field = new FieldDescription('position', [], $fieldMapping);
+        $field = new FieldDescription('name', [], [], $associationMapping);
 
+        $this->assertSame('integer', $field->getType());
         $this->assertSame('integer', $field->getMappingType());
+        $this->assertSame($associationMapping, $field->getAssociationMapping());
+    }
+
+    public function testSetParentAssociationMappings(): void
+    {
+        $parentAssociationMappings = [['fieldName' => 'subObject']];
+
+        $field = new FieldDescription('name', [], [], [], $parentAssociationMappings);
+
+        $this->assertSame($parentAssociationMappings, $field->getParentAssociationMappings());
+    }
+
+    public function testSetInvalidParentAssociationMappings(): void
+    {
+        $parentAssociationMappings = ['subObject'];
+
+        $this->expectException(\InvalidArgumentException::class);
+        new FieldDescription('name', [], [], [], $parentAssociationMappings);
     }
 
     public function testGetTargetModel(): void
@@ -194,12 +175,12 @@ class FieldDescriptionTest extends TestCase
         $associationMapping = [
             'type' => 'integer',
             'fieldName' => 'position',
-            'targetEntity' => 'someValue',
+            'targetEntity' => \stdClass::class,
         ];
 
         $field = new FieldDescription('position', [], [], $associationMapping);
 
-        $this->assertSame('someValue', $field->getTargetModel());
+        $this->assertSame(\stdClass::class, $field->getTargetModel());
     }
 
     public function testIsIdentifierFromFieldMapping(): void
@@ -215,25 +196,12 @@ class FieldDescriptionTest extends TestCase
         $this->assertTrue($field->isIdentifier());
     }
 
-    public function testGetFieldMapping(): void
-    {
-        $fieldMapping = [
-            'type' => 'integer',
-            'fieldName' => 'position',
-            'id' => 'someId',
-        ];
-
-        $field = new FieldDescription('position', [], $fieldMapping);
-
-        $this->assertSame($fieldMapping, $field->getFieldMapping());
-    }
-
     public function testGetValue(): void
     {
-        $mockedObject = $this->getMockBuilder(\stdClass::class)->addMethods(['myMethod'])->getMock();
-        $mockedObject->expects($this->once())->method('myMethod')->willReturn('myMethodValue');
+        $mockedObject = $this->getMockBuilder(\stdClass::class)->addMethods(['getFoo'])->getMock();
+        $mockedObject->expects($this->once())->method('getFoo')->willReturn('myMethodValue');
 
-        $field = new FieldDescription('name', ['code' => 'myMethod']);
+        $field = new FieldDescription('name', ['accessor' => 'foo']);
 
         $this->assertSame('myMethodValue', $field->getValue($mockedObject));
     }
@@ -290,5 +258,57 @@ class FieldDescriptionTest extends TestCase
         $field = new FieldDescription('myMethod', [], [], [], [], 'myEmbeddedObject.child.myMethod');
 
         $this->assertSame('myMethodValue', $field->getValue($mockedObject));
+    }
+
+    /**
+     * @dataProvider getDescribesSingleValuedAssociationProvider
+     *
+     * @param string|int $mappingType
+     */
+    public function testDescribesSingleValuedAssociation($mappingType, bool $expected): void
+    {
+        $fd = new FieldDescription('foo', [], [], [
+            'fieldName' => 'foo',
+            'type' => $mappingType,
+        ]);
+        $this->assertSame($expected, $fd->describesSingleValuedAssociation());
+    }
+
+    /**
+     * @phpstan-return iterable<array{0: string|int, 1: bool}>
+     */
+    public function getDescribesSingleValuedAssociationProvider(): iterable
+    {
+        yield 'one to one' => [ClassMetadata::ONE_TO_ONE, true];
+        yield 'many to one' => [ClassMetadata::MANY_TO_ONE, true];
+        yield 'one to many' => [ClassMetadata::ONE_TO_MANY, false];
+        yield 'many to many' => [ClassMetadata::MANY_TO_MANY, false];
+        yield 'string' => ['string', false];
+    }
+
+    /**
+     * @dataProvider getDescribesCollectionValuedAssociationProvider
+     *
+     * @param string|int $mappingType
+     */
+    public function testDescribesCollectionValuedAssociation($mappingType, bool $expected): void
+    {
+        $fd = new FieldDescription('foo', [], [], [
+            'fieldName' => 'foo',
+            'type' => $mappingType,
+        ]);
+        $this->assertSame($expected, $fd->describesCollectionValuedAssociation());
+    }
+
+    /**
+     * @phpstan-return iterable<array{0: string|int, 1: bool}>
+     */
+    public function getDescribesCollectionValuedAssociationProvider(): iterable
+    {
+        yield 'one to one' => [ClassMetadata::ONE_TO_ONE, false];
+        yield 'many to one' => [ClassMetadata::MANY_TO_ONE, false];
+        yield 'one to many' => [ClassMetadata::ONE_TO_MANY, true];
+        yield 'many to many' => [ClassMetadata::MANY_TO_MANY, true];
+        yield 'string' => ['string', false];
     }
 }

@@ -17,8 +17,6 @@ use Symfony\Component\Config\Definition\Builder\TreeBuilder;
 use Symfony\Component\Config\Definition\ConfigurationInterface;
 
 /**
- * @final since sonata-project/doctrine-orm-admin-bundle 3.24
- *
  * This class contains the configuration information for the bundle.
  *
  * This information is solely responsible for how the different configuration
@@ -26,25 +24,17 @@ use Symfony\Component\Config\Definition\ConfigurationInterface;
  *
  * @author Michael Williams <mtotheikle@gmail.com>
  */
-class Configuration implements ConfigurationInterface
+final class Configuration implements ConfigurationInterface
 {
     /**
      * Generates the configuration tree.
-     *
-     * @return TreeBuilder
      */
-    public function getConfigTreeBuilder()
+    public function getConfigTreeBuilder(): TreeBuilder
     {
         $treeBuilder = new TreeBuilder('sonata_doctrine_orm_admin');
 
-        // Keep compatibility with symfony/config < 4.2
-        if (!method_exists($treeBuilder, 'getRootNode')) {
-            $rootNode = $treeBuilder->root('sonata_doctrine_orm_admin');
-        } else {
-            $rootNode = $treeBuilder->getRootNode();
-        }
-
-        $rootNode
+        $treeBuilder
+            ->getRootNode()
             ->children()
                 ->scalarNode('entity_manager')->defaultNull()->end()
                 ->arrayNode('audit')
@@ -78,8 +68,7 @@ class Configuration implements ConfigurationInterface
                         ->end()
                     ->end()
                 ->end()
-            ->end()
-        ;
+            ->end();
 
         return $treeBuilder;
     }

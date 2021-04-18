@@ -2,6 +2,88 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [3.32.1](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/compare/3.32.0...3.32.1) - 2021-04-06
+### Fixed
+- [[#1393](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1393)] Added missing filter declaration in the config ([@VincentLanglet](https://github.com/VincentLanglet))
+
+## [3.32.0](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/compare/3.31.0...3.32.0) - 2021-03-30
+### Added
+- [[#1355](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1355)] `ModelManager::reverseTransform()` ([@VincentLanglet](https://github.com/VincentLanglet))
+- [[#1350](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1350)] Added `FieldDescriptionFactory` class ([@VincentLanglet](https://github.com/VincentLanglet))
+
+### Deprecated
+- [[#1341](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1341)] Deprecated the `Sonata\DoctrineORMAdminBundle\Filter\EmptyFilter` service since its class is already deprecated since version 3.27 ([@dmaicher](https://github.com/dmaicher))
+- [[#1355](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1355)] `ModelManager::modelReverseTransform()` ([@VincentLanglet](https://github.com/VincentLanglet))
+- [[#1350](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1350)] `AbstractTypeGuesser` class ([@VincentLanglet](https://github.com/VincentLanglet))
+- [[#1350](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1350)] `FilterTypeGuesser::guessType()` ([@VincentLanglet](https://github.com/VincentLanglet))
+- [[#1350](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1350)] `TypeGuesser::guessType()` ([@VincentLanglet](https://github.com/VincentLanglet))
+- [[#1350](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1350)] `ModelManager:: getParentMetadataForProperty()` ([@VincentLanglet](https://github.com/VincentLanglet))
+- [[#1350](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1350)] `ModelManager:: getNewFieldDescriptionInstance()` ([@VincentLanglet](https://github.com/VincentLanglet))
+- [[#1350](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1350)] `ModelManager:: getModelInstance()` ([@VincentLanglet](https://github.com/VincentLanglet))
+
+### Fixed
+- [[#1376](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1376)] Fixed triggering deprecation because audit reader is not tagged ([@franmomu](https://github.com/franmomu))
+- [[#1374](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1374)] Fixed deprecations about not implementing `FieldDescriptionInterface` methods ([@franmomu](https://github.com/franmomu))
+- [[#1358](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1358)] Resulting `WHERE` clause from `Filter::applyWhere()` when using `OR` conditions on queries that already have previous conditions ([@phansys](https://github.com/phansys))
+- [[#1368](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1368)] Fetch join queries for Pager ([@VincentLanglet](https://github.com/VincentLanglet))
+- [[#1368](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1368)] Pager when using entity inheritance ([@VincentLanglet](https://github.com/VincentLanglet))
+- [[#1365](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1365)] Missing argument 2 in calls to `trigger_error()` ([@phansys](https://github.com/phansys))
+
+## [3.31.0](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/compare/3.30.0...3.31.0) - 2021-03-11
+### Added
+- [[#1335](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1335)] Support for symfony/config:^5.2 ([@phansys](https://github.com/phansys))
+- [[#1335](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1335)] Support for symfony/dependency-injection:^5.2 ([@phansys](https://github.com/phansys))
+- [[#1335](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1335)] Support for symfony/http-foundation:^5.2 ([@phansys](https://github.com/phansys))
+- [[#1319](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1319)] `Sonata\DoctrineORMAdminBundle\Datagrid\ProxyQueryInterface::getDoctrineQuery()` ([@VincentLanglet](https://github.com/VincentLanglet))
+
+### Changed
+- [[#1336](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1336)] Update constraint for "sonata-project/admin-bundle" from ^3.88 to ^3.89.1 ([@phansys](https://github.com/phansys))
+
+### Deprecated
+- [[#1333](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1333)] Deprecate passing arguments to `ProxyQuery::execute()` method ([@VincentLanglet](https://github.com/VincentLanglet))
+- [[#1326](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1326)] Not passing a `Sonata\DoctrineORMAdminBundle\Datagrid\ProxyQueryInterface` as argument 2 of `ModelManager::addIdentifiersToQuery()` ([@VincentLanglet](https://github.com/VincentLanglet))
+- [[#1326](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1326)] Not passing a `Sonata\DoctrineORMAdminBundle\Datagrid\ProxyQueryInterface` as argument 2 of `ModelManager::batchDelete()` ([@VincentLanglet](https://github.com/VincentLanglet))
+- [[#1319](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1319)] Class `Sonata\DoctrineORMAdminBundle\Datagrid\OrderByToSelectWalker` ([@VincentLanglet](https://github.com/VincentLanglet))
+- [[#1319](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1319)] `Sonata\DoctrineORMAdminBundle\Datagrid\ProxyQuery::getFixedQueryBuilder()` ([@VincentLanglet](https://github.com/VincentLanglet))
+- [[#1319](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1319)] `Sonata\DoctrineORMAdminBundle\Datagrid\ProxyQuery::getSingleScalarResult()` ([@VincentLanglet](https://github.com/VincentLanglet))
+- [[#1323](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1323)] Not passing a `ManagerRegistry` as first argument of `ObjectAclManipulator` ([@VincentLanglet](https://github.com/VincentLanglet))
+
+### Fixed
+- [[#1319](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1319)] Do not display multiple times the same row in the admin list and the export list ([@VincentLanglet](https://github.com/VincentLanglet))
+
+## [3.30.0](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/compare/3.29.0...3.30.0) - 2021-02-24
+### Added
+- [[#1285](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1285)] Added support for PHP 8.x ([@Yozhef](https://github.com/Yozhef))
+
+### Deprecated
+- [[#1291](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1291)] Passing another `type` value to a filter than an integer handled ([@VincentLanglet](https://github.com/VincentLanglet))
+
+### Fixed
+- [[#1314](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1314)] Unavoidable deprecation about the `code` option ([@VincentLanglet](https://github.com/VincentLanglet))
+- [[#1247](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1247)] `ChoiceFilter` returns `null` values when used with the type `NOT_EQUAL` ([@VincentLanglet](https://github.com/VincentLanglet))
+
+## [3.29.0](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/compare/3.28.0...3.29.0) - 2021-02-08
+### Deprecated
+- [[#1292](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1292)] Extending `ProxyQuery` ([@VincentLanglet](https://github.com/VincentLanglet))
+- [[#1292](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1292)] Extending `DataSource` ([@VincentLanglet](https://github.com/VincentLanglet))
+
+### Fixed
+- [[#1287](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1287)] Fixed `CountFilter` ([@VincentLanglet](https://github.com/VincentLanglet))
+
+## [3.28.0](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/compare/3.27.0...3.28.0) - 2021-01-26
+### Added
+- [[#1280](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1280)] Added `CountFilter`. ([@rgrassian](https://github.com/rgrassian))
+
+### Changed
+- [[#1268](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1268)] Use Doctrine ORM Paginator to count in Pager. ([@VincentLanglet](https://github.com/VincentLanglet))
+
+### Deprecated
+- [[#1268](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1268)] `Pager::CONCAT_SEPARATOR` ([@VincentLanglet](https://github.com/VincentLanglet))
+
+### Fixed
+- [[#1265](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1265)] Do not provide a default `null` `field_type` option for Filter ([@VincentLanglet](https://github.com/VincentLanglet))
+- [[#1268](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1268)] Support of composite key for computeNbResult ([@VincentLanglet](https://github.com/VincentLanglet))
+
 ## [3.27.0](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/compare/3.26.0...3.27.0) - 2021-01-17
 ### Added
 - [[#1262](https://github.com/sonata-project/SonataDoctrineORMAdminBundle/pull/1262)] Added Pager::getCurrentPageResults() ([@VincentLanglet](https://github.com/VincentLanglet))
