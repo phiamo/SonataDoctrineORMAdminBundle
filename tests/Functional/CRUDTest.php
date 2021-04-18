@@ -13,25 +13,12 @@ declare(strict_types=1);
 
 namespace Sonata\DoctrineORMAdminBundle\Tests\Functional;
 
+use Doctrine\Bundle\DoctrineBundle\Registry;
 use Sonata\DoctrineORMAdminBundle\Tests\App\Entity\Category;
 use Symfony\Component\HttpFoundation\Request;
 
-final class CRUDTest extends BasePantherTestCase
+final class CRUDTest extends BaseFunctionalTestCase
 {
-    public function testFilter(): void
-    {
-        $this->client->request(Request::METHOD_GET, '/admin/tests/app/category/list');
-
-        $this->client->clickLink('Filters');
-        $this->client->clickLink('Name');
-
-        $this->client->submitForm('Filter', [
-            'filter[name][value]' => 'Novel',
-        ]);
-
-        self::assertSelectorTextContains('.sonata-link-identifier', 'Novel');
-    }
-
     public function testList(): void
     {
         $this->client->request(Request::METHOD_GET, '/admin/tests/app/category/list');
@@ -51,7 +38,9 @@ final class CRUDTest extends BasePantherTestCase
         $crawler = $this->client->request(Request::METHOD_GET, '/admin/tests/app/category/create');
 
         $attributeId = $crawler->filter('.category_id')->attr('name');
+        $this->assertNotNull($attributeId);
         $attributeName = $crawler->filter('.category_name')->attr('name');
+        $this->assertNotNull($attributeName);
 
         $this->client->submitForm('Create and return to list', [
             $attributeId => 'new id',
@@ -66,6 +55,7 @@ final class CRUDTest extends BasePantherTestCase
         $crawler = $this->client->request(Request::METHOD_GET, '/admin/tests/app/category/category_novel/edit');
 
         $attributeName = $crawler->filter('.category_name')->attr('name');
+        $this->assertNotNull($attributeName);
 
         $this->client->submitForm('Update and close', [
             $attributeName => 'edited name',
@@ -76,7 +66,9 @@ final class CRUDTest extends BasePantherTestCase
 
     public function testDelete(): void
     {
-        $entityManager = static::bootKernel()->getContainer()->get('doctrine')->getManager();
+        $doctrine = static::bootKernel()->getContainer()->get('doctrine');
+        \assert($doctrine instanceof Registry);
+        $entityManager = $doctrine->getManager();
 
         $entityManager->persist(new Category('category_to_remove', 'name'));
         $entityManager->flush();

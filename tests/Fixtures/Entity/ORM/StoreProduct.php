@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 /*
  * This file is part of the Sonata Project package.
  *
@@ -23,6 +25,8 @@ class StoreProduct
      * @ORM\JoinColumn(nullable=false, onDelete="CASCADE")
      * @ORM\Id()
      * @ORM\GeneratedValue("NONE")
+     *
+     * @var Store|null
      */
     protected $store;
 
@@ -31,11 +35,15 @@ class StoreProduct
      * @ORM\JoinColumn(nullable=false, onDelete="CASCADE")
      * @ORM\Id()
      * @ORM\GeneratedValue("NONE")
+     *
+     * @var Product|null
      */
     protected $product;
 
     /**
      * @ORM\Column(type="string")
+     *
+     * @var string|null
      */
     protected $name;
 }

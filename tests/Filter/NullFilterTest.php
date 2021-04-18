@@ -26,11 +26,11 @@ final class NullFilterTest extends FilterTestCase
             'field_options' => ['class' => 'FooBar'],
         ]);
 
-        $builder = new ProxyQuery($this->createQueryBuilderStub());
+        $proxyQuery = new ProxyQuery($this->createQueryBuilderStub());
 
-        $filter->filter($builder, 'alias', 'field', null);
+        $filter->filter($proxyQuery, 'alias', 'field', []);
 
-        $this->assertSame([], $builder->query);
+        $this->assertSameQuery([], $proxyQuery);
         $this->assertFalse($filter->isActive());
     }
 
@@ -45,12 +45,12 @@ final class NullFilterTest extends FilterTestCase
             'inverse' => $inverse,
         ]);
 
-        $builder = new ProxyQuery($this->createQueryBuilderStub());
-        $this->assertSame([], $builder->query);
+        $proxyQuery = new ProxyQuery($this->createQueryBuilderStub());
+        $this->assertSameQuery([], $proxyQuery);
 
-        $filter->filter($builder, 'alias', 'field', ['value' => $value]);
+        $filter->filter($proxyQuery, 'alias', 'field', ['value' => $value]);
 
-        $this->assertSame([$expectedQuery], $builder->query);
+        $this->assertSameQuery([$expectedQuery], $proxyQuery);
         $this->assertTrue($filter->isActive());
     }
 
@@ -65,13 +65,16 @@ final class NullFilterTest extends FilterTestCase
         $this->assertSame(BooleanType::class, $options['field_type']);
     }
 
-    public function valueDataProvider(): array
+    /**
+     * @phpstan-return iterable<array{bool, int, string}>
+     */
+    public function valueDataProvider(): iterable
     {
         return [
-            [false, BooleanType::TYPE_YES, 'alias.field IS NULL'],
-            [false, BooleanType::TYPE_NO, 'alias.field IS NOT NULL'],
-            [true, BooleanType::TYPE_YES, 'alias.field IS NOT NULL'],
-            [true, BooleanType::TYPE_NO, 'alias.field IS NULL'],
+            [false, BooleanType::TYPE_YES, 'WHERE alias.field IS NULL'],
+            [false, BooleanType::TYPE_NO, 'WHERE alias.field IS NOT NULL'],
+            [true, BooleanType::TYPE_YES, 'WHERE alias.field IS NOT NULL'],
+            [true, BooleanType::TYPE_NO, 'WHERE alias.field IS NULL'],
         ];
     }
 }

@@ -18,17 +18,39 @@ use Doctrine\ORM\Query\Expr\Andx;
 use Doctrine\ORM\Query\Expr\Orx;
 use Doctrine\ORM\QueryBuilder;
 use PHPUnit\Framework\TestCase;
+use Sonata\DoctrineORMAdminBundle\Datagrid\ProxyQuery;
 
-class FilterTestCase extends TestCase
+abstract class FilterTestCase extends TestCase
 {
-    public function createQueryBuilderStub(): QueryBuilder
+    /**
+     * @param string[] $expected
+     */
+    final protected function assertSameQuery(array $expected, ProxyQuery $proxyQuery): void
     {
-        $testCase = $this;
+        $queryBuilder = $proxyQuery->getQueryBuilder();
+        if (!$queryBuilder instanceof TestQueryBuilder) {
+            throw new \InvalidArgumentException('The query builder should be build with "createQueryBuilderStub()".');
+        }
 
-        $queryBuilder = $this->createStub(QueryBuilder::class);
+        $this->assertSame($expected, $queryBuilder->query);
+    }
 
-        $queryBuilder->queryParameters = [];
-        $queryBuilder->query = [];
+    /**
+     * @param mixed[] $expected
+     */
+    final protected function assertSameQueryParameters(array $expected, ProxyQuery $proxyQuery): void
+    {
+        $queryBuilder = $proxyQuery->getQueryBuilder();
+        if (!$queryBuilder instanceof TestQueryBuilder) {
+            throw new \InvalidArgumentException('The query builder should be build with "createQueryBuilderStub()".');
+        }
+
+        $this->assertSame($expected, $queryBuilder->queryParameters);
+    }
+
+    final protected function createQueryBuilderStub(): TestQueryBuilder
+    {
+        $queryBuilder = $this->createStub(TestQueryBuilder::class);
 
         $queryBuilder->method('setParameter')->willReturnCallback(
             static function (string $name, $value) use ($queryBuilder): void {
@@ -38,13 +60,25 @@ class FilterTestCase extends TestCase
 
         $queryBuilder->method('andWhere')->willReturnCallback(
             static function ($query) use ($queryBuilder): void {
-                $queryBuilder->query[] = (string) $query;
+                $queryBuilder->query[] = sprintf('WHERE %s', $query);
+            }
+        );
+
+        $queryBuilder->method('andHaving')->willReturnCallback(
+            static function ($query) use ($queryBuilder): void {
+                $queryBuilder->query[] = sprintf('HAVING %s', $query);
+            }
+        );
+
+        $queryBuilder->method('addGroupBy')->willReturnCallback(
+            static function (string $groupBy) use ($queryBuilder): void {
+                $queryBuilder->query[] = sprintf('GROUP BY %s', $groupBy);
             }
         );
 
         $queryBuilder->method('expr')->willReturnCallback(
-            static function () use ($testCase): Expr {
-                return $testCase->createExprStub();
+            function (): Expr {
+                return $this->createExprStub();
             }
         );
 
@@ -119,4 +153,13 @@ class FilterTestCase extends TestCase
 
         return $expr;
     }
+}
+
+class TestQueryBuilder extends QueryBuilder
+{
+    /** @var string[] */
+    public $query = [];
+
+    /** @var mixed[] */
+    public $queryParameters = [];
 }

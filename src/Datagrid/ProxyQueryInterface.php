@@ -13,13 +13,25 @@ declare(strict_types=1);
 
 namespace Sonata\DoctrineORMAdminBundle\Datagrid;
 
+use Doctrine\ORM\Query;
 use Doctrine\ORM\QueryBuilder;
 use Sonata\AdminBundle\Datagrid\ProxyQueryInterface as BaseProxyQueryInterface;
 
 interface ProxyQueryInterface extends BaseProxyQueryInterface
 {
+    public function getUniqueParameterId(): int;
+
     /**
-     * @return QueryBuilder
+     * @param mixed[] $associationMappings
      */
-    public function getQueryBuilder();
+    public function entityJoin(array $associationMappings): string;
+
+    public function getQueryBuilder(): QueryBuilder;
+
+    /**
+     * This method should be preferred over `$this->getQueryBuilder()->getQuery()`
+     * since some changes are done to the query builder in order to handle all the
+     * previously called Sonata\AdminBundle\Datagrid\ProxyQueryInterface methods.
+     */
+    public function getDoctrineQuery(): Query;
 }

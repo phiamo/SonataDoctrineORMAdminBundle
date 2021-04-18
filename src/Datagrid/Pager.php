@@ -21,8 +21,6 @@ use Sonata\AdminBundle\Datagrid\Pager as BasePager;
  *
  * @author Jonathan H. Wage <jonwage@gmail.com>
  *
- * @final since sonata-project/doctrine-orm-admin-bundle 3.24
- *
  * @phpstan-extends BasePager<ProxyQueryInterface>
  */
 final class Pager extends BasePager
@@ -34,7 +32,26 @@ final class Pager extends BasePager
 
     public function getCurrentPageResults(): iterable
     {
-        return $this->getQuery()->execute();
+        $query = $this->getQuery();
+        if (!$query instanceof ProxyQueryInterface) {
+            throw new \TypeError(sprintf(
+                'The pager query MUST implement %s.',
+                ProxyQueryInterface::class,
+            ));
+        }
+
+        $identifierFieldNames = $query
+            ->getQueryBuilder()
+            ->getEntityManager()
+            ->getMetadataFactory()
+            ->getMetadataFor(current($query->getQueryBuilder()->getRootEntities()))
+            ->getIdentifierFieldNames();
+
+        // Paginator with fetchJoinCollection doesn't work with composite primary keys
+        // https://github.com/doctrine/orm/issues/2910
+        $paginator = new Paginator($query->getDoctrineQuery(), 1 === \count($identifierFieldNames));
+
+        return $paginator->getIterator();
     }
 
     public function countResults(): int
@@ -46,8 +63,13 @@ final class Pager extends BasePager
     {
         $this->resultsCount = $this->computeResultsCount();
 
-        $this->getQuery()->setFirstResult(null);
-        $this->getQuery()->setMaxResults(null);
+        $query = $this->getQuery();
+        if (null === $query) {
+            throw new \LogicException('The pager need a query to be initialised');
+        }
+
+        $query->setFirstResult(null);
+        $query->setMaxResults(null);
 
         if (0 === $this->getPage() || 0 === $this->getMaxPerPage() || 0 === $this->countResults()) {
             $this->setLastPage(0);
@@ -56,8 +78,8 @@ final class Pager extends BasePager
 
             $this->setLastPage((int) ceil($this->countResults() / $this->getMaxPerPage()));
 
-            $this->getQuery()->setFirstResult($offset);
-            $this->getQuery()->setMaxResults($this->getMaxPerPage());
+            $query->setFirstResult($offset);
+            $query->setMaxResults($this->getMaxPerPage());
         }
     }
 
@@ -66,14 +88,10 @@ final class Pager extends BasePager
         $query = $this->getQuery();
 
         if (!$query instanceof ProxyQueryInterface) {
-            throw new \TypeError(sprintf(
-                'The pager query MUST implement %s, %s provided.',
-                ProxyQueryInterface::class,
-                \is_object($query) ? sprintf('instance of %s', \get_class($query)) : \gettype($query)
-            ));
+            throw new \TypeError(sprintf('The pager query MUST implement %s.', ProxyQueryInterface::class));
         }
 
-        $paginator = new Paginator($query->getQueryBuilder());
+        $paginator = new Paginator($query->getDoctrineQuery());
 
         return \count($paginator);
     }

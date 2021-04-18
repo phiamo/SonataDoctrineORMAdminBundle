@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 /*
  * This file is part of the Sonata Project package.
  *
@@ -23,16 +25,10 @@ class AssociatedEntity
      */
     protected $embeddedEntity;
 
-    /**
-     * AssociatedEntity constructor.
-     *
-     * @param int                       $plainField
-     * @param Embeddable\EmbeddedEntity $embeddedEntity
-     */
-    public function __construct($plainField = null, Embeddable\EmbeddedEntity $embeddedEntity)
+    public function __construct(Embeddable\EmbeddedEntity $embeddedEntity, int $plainField)
     {
-        $this->plainField = $plainField;
         $this->embeddedEntity = $embeddedEntity;
+        $this->plainField = $plainField;
     }
 
     /**

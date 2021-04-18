@@ -13,31 +13,26 @@ declare(strict_types=1);
 
 namespace Sonata\DoctrineORMAdminBundle\Exporter;
 
-use Doctrine\ORM\Query;
-use Sonata\AdminBundle\Datagrid\ProxyQueryInterface;
+use Sonata\AdminBundle\Datagrid\ProxyQueryInterface as BaseProxyQueryInterface;
 use Sonata\AdminBundle\Exporter\DataSourceInterface;
-use Sonata\DoctrineORMAdminBundle\Datagrid\OrderByToSelectWalker;
+use Sonata\DoctrineORMAdminBundle\Datagrid\ProxyQueryInterface;
 use Sonata\Exporter\Source\DoctrineORMQuerySourceIterator;
 use Sonata\Exporter\Source\SourceIteratorInterface;
 
-class DataSource implements DataSourceInterface
+final class DataSource implements DataSourceInterface
 {
-    public function createIterator(ProxyQueryInterface $query, array $fields): SourceIteratorInterface
+    public function createIterator(BaseProxyQueryInterface $query, array $fields): SourceIteratorInterface
     {
-        $query->select('DISTINCT '.current($query->getRootAliases()));
+        if (!$query instanceof ProxyQueryInterface) {
+            throw new \TypeError(sprintf('The query MUST implement %s.', ProxyQueryInterface::class));
+        }
+
+        // Distinct is needed to iterate, even if group by is used
+        // @see https://github.com/doctrine/orm/issues/5868
+        $query->getQueryBuilder()->distinct();
         $query->setFirstResult(null);
         $query->setMaxResults(null);
 
-        $sortBy = $query->getSortBy();
-
-        if (null !== $sortBy) {
-            $query->addOrderBy($sortBy, $query->getSortOrder());
-            $doctrineQuery = $query->getQuery();
-            $doctrineQuery->setHint(Query::HINT_CUSTOM_TREE_WALKERS, [OrderByToSelectWalker::class]);
-        } else {
-            $doctrineQuery = $query->getQuery();
-        }
-
-        return new DoctrineORMQuerySourceIterator($doctrineQuery, $fields);
+        return new DoctrineORMQuerySourceIterator($query->getDoctrineQuery(), $fields);
     }
 }

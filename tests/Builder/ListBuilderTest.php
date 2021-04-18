@@ -14,12 +14,14 @@ declare(strict_types=1);
 namespace Sonata\DoctrineORMAdminBundle\Tests\Builder;
 
 use Doctrine\ORM\Mapping\ClassMetadata;
+use PHPUnit\Framework\MockObject\MockObject;
+use PHPUnit\Framework\MockObject\Stub;
 use PHPUnit\Framework\TestCase;
 use Sonata\AdminBundle\Admin\AdminInterface;
-use Sonata\AdminBundle\Guesser\TypeGuesserInterface;
-use Sonata\DoctrineORMAdminBundle\Admin\FieldDescription;
+use Sonata\AdminBundle\Datagrid\ListMapper;
+use Sonata\AdminBundle\FieldDescription\TypeGuesserInterface;
 use Sonata\DoctrineORMAdminBundle\Builder\ListBuilder;
-use Sonata\DoctrineORMAdminBundle\Model\ModelManager;
+use Sonata\DoctrineORMAdminBundle\FieldDescription\FieldDescription;
 use Symfony\Component\Form\Guess\Guess;
 use Symfony\Component\Form\Guess\TypeGuess;
 
@@ -29,19 +31,27 @@ use Symfony\Component\Form\Guess\TypeGuess;
  */
 class ListBuilderTest extends TestCase
 {
+    /**
+     * @var Stub&TypeGuesserInterface
+     */
     private $typeGuesser;
+
+    /**
+     * @var ListBuilder
+     */
     private $listBuilder;
+
+    /**
+     * @var MockObject&AdminInterface<object>
+     */
     private $admin;
-    private $modelManager;
 
     protected function setUp(): void
     {
         $this->typeGuesser = $this->createStub(TypeGuesserInterface::class);
-        $this->modelManager = $this->createStub(ModelManager::class);
         $this->admin = $this->createMock(AdminInterface::class);
 
         $this->admin->method('getClass')->willReturn('Foo');
-        $this->admin->method('getModelManager')->willReturn($this->modelManager);
 
         $this->listBuilder = new ListBuilder($this->typeGuesser);
     }
@@ -51,9 +61,10 @@ class ListBuilderTest extends TestCase
         $this->admin->expects($this->once())->method('addListFieldDescription');
 
         $fieldDescription = new FieldDescription('foo');
+        $fieldDescription->setAdmin($this->admin);
 
         $list = $this->listBuilder->getBaseList();
-        $this->listBuilder->addField($list, 'actions', $fieldDescription, $this->admin);
+        $this->listBuilder->addField($list, 'actions', $fieldDescription);
 
         $this->assertSame(
             '@SonataAdmin/CRUD/list__action.html.twig',
@@ -65,16 +76,17 @@ class ListBuilderTest extends TestCase
     public function testCorrectFixedActionsFieldType(): void
     {
         $this->admin->expects($this->once())->method('addListFieldDescription');
-        $this->typeGuesser->method('guessType')->willReturn(new TypeGuess('_action', [], Guess::LOW_CONFIDENCE));
+        $this->typeGuesser->method('guess')->willReturn(new TypeGuess(ListMapper::TYPE_ACTIONS, [], Guess::LOW_CONFIDENCE));
 
         $fieldDescription = new FieldDescription('_action');
         $fieldDescription->setOption('actions', ['test' => []]);
+        $fieldDescription->setAdmin($this->admin);
 
         $list = $this->listBuilder->getBaseList();
-        $this->listBuilder->addField($list, null, $fieldDescription, $this->admin);
+        $this->listBuilder->addField($list, null, $fieldDescription);
 
         $this->assertSame(
-            'actions',
+            ListMapper::TYPE_ACTIONS,
             $list->get('_action')->getType(),
             'Standard list _action field has "actions" type'
         );
@@ -88,28 +100,24 @@ class ListBuilderTest extends TestCase
     /**
      * @dataProvider fixFieldDescriptionData
      */
-    public function testFixFieldDescription($type, $template): void
+    public function testFixFieldDescription(int $type, string $template): void
     {
-        // NEXT_MAJOR: Remove the next 3 lines.
-        $classMetadata = $this->createStub(ClassMetadata::class);
-        $classMetadata->fieldMappings = [2 => [1 => 'test', 'type' => 'string']];
-        $classMetadata->associationMappings = [2 => ['fieldName' => 'fake']];
-
         $this->admin->expects($this->once())->method('attachAdminClass');
-        // NEXT_MAJOR: Remove the next 2 lines.
-        $this->modelManager->method('hasMetadata')->willReturn(true);
-        $this->modelManager->method('getParentMetadataForProperty')->willReturn([$classMetadata, 2, []]);
 
         $fieldDescription = new FieldDescription('test', [], ['type' => $type]);
         $fieldDescription->setOption('sortable', true);
         $fieldDescription->setType('fakeType');
+        $fieldDescription->setAdmin($this->admin);
 
-        $this->listBuilder->fixFieldDescription($this->admin, $fieldDescription);
+        $this->listBuilder->fixFieldDescription($fieldDescription);
 
         $this->assertSame($template, $fieldDescription->getTemplate());
     }
 
-    public function fixFieldDescriptionData(): array
+    /**
+     * @phpstan-return iterable<array{int, string}>
+     */
+    public function fixFieldDescriptionData(): iterable
     {
         return [
             'one-to-one' => [
@@ -135,6 +143,8 @@ class ListBuilderTest extends TestCase
     {
         $this->expectException(\RuntimeException::class);
 
-        $this->listBuilder->fixFieldDescription($this->admin, new FieldDescription('name'));
+        $fieldDescription = new FieldDescription('name');
+        $fieldDescription->setAdmin($this->admin);
+        $this->listBuilder->fixFieldDescription($fieldDescription);
     }
 }

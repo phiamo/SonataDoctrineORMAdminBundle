@@ -14,21 +14,22 @@ declare(strict_types=1);
 namespace Sonata\DoctrineORMAdminBundle\Tests\Builder;
 
 use Doctrine\ORM\Mapping\ClassMetadata;
+use PHPUnit\Framework\MockObject\MockObject;
+use PHPUnit\Framework\MockObject\Stub;
 use PHPUnit\Framework\TestCase;
 use Sonata\AdminBundle\Admin\AdminInterface;
-use Sonata\AdminBundle\Admin\FieldDescriptionCollection;
 use Sonata\AdminBundle\Datagrid\Datagrid;
 use Sonata\AdminBundle\Datagrid\DatagridInterface;
 use Sonata\AdminBundle\Datagrid\Pager;
 use Sonata\AdminBundle\Datagrid\ProxyQueryInterface;
 use Sonata\AdminBundle\Datagrid\SimplePager;
+use Sonata\AdminBundle\FieldDescription\FieldDescriptionCollection;
+use Sonata\AdminBundle\FieldDescription\TypeGuesserInterface;
 use Sonata\AdminBundle\Filter\FilterFactoryInterface;
-use Sonata\AdminBundle\Guesser\TypeGuesserInterface;
 use Sonata\AdminBundle\Translator\FormLabelTranslatorStrategy;
-use Sonata\DoctrineORMAdminBundle\Admin\FieldDescription;
 use Sonata\DoctrineORMAdminBundle\Builder\DatagridBuilder;
+use Sonata\DoctrineORMAdminBundle\FieldDescription\FieldDescription;
 use Sonata\DoctrineORMAdminBundle\Filter\ModelAutocompleteFilter;
-use Sonata\DoctrineORMAdminBundle\Model\ModelManager;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\Form\FormFactoryInterface;
 use Symfony\Component\Form\Guess\TypeGuess;
@@ -43,11 +44,26 @@ final class DatagridBuilderTest extends TestCase
      * @var DatagridBuilder
      */
     private $datagridBuilder;
+
+    /**
+     * @var Stub&TypeGuesserInterface
+     */
     private $typeGuesser;
+
+    /**
+     * @var Stub&FormFactoryInterface
+     */
     private $formFactory;
+
+    /**
+     * @var Stub&FilterFactoryInterface
+     */
     private $filterFactory;
+
+    /**
+     * @var MockObject&AdminInterface<object>
+     */
     private $admin;
-    private $modelManager;
 
     protected function setUp(): void
     {
@@ -62,25 +78,23 @@ final class DatagridBuilderTest extends TestCase
         );
 
         $this->admin = $this->createMock(AdminInterface::class);
-        $this->modelManager = $this->createMock(ModelManager::class);
-
         $this->admin->method('getClass')->willReturn('FakeClass');
-        $this->admin->method('getModelManager')->willReturn($this->modelManager);
     }
 
     /**
+     * @phpstan-param class-string $pager
+     *
      * @dataProvider getBaseDatagridData
      */
-    public function testGetBaseDatagrid($pagerType, $pager): void
+    public function testGetBaseDatagrid(string $pagerType, string $pager): void
     {
         $proxyQuery = $this->createStub(ProxyQueryInterface::class);
-        $fieldDescription = new FieldDescriptionCollection();
+        $fieldDescriptionCollection = new FieldDescriptionCollection();
         $formBuilder = $this->createStub(FormBuilderInterface::class);
 
         $this->admin->method('getPagerType')->willReturn($pagerType);
         $this->admin->method('createQuery')->willReturn($proxyQuery);
-        $this->admin->method('getList')->willReturn($fieldDescription);
-        $this->modelManager->method('getIdentifierFieldNames')->willReturn(['id']);
+        $this->admin->method('getList')->willReturn($fieldDescriptionCollection);
         $this->formFactory->method('createNamedBuilder')->willReturn($formBuilder);
 
         $datagrid = $this->datagridBuilder->getBaseDatagrid($this->admin);
@@ -89,7 +103,10 @@ final class DatagridBuilderTest extends TestCase
         $this->assertInstanceOf($pager, $datagrid->getPager());
     }
 
-    public function getBaseDatagridData(): array
+    /**
+     * @phpstan-return iterable<array{string, class-string}>
+     */
+    public function getBaseDatagridData(): iterable
     {
         return [
             'simple' => [
@@ -114,27 +131,22 @@ final class DatagridBuilderTest extends TestCase
 
     public function testFixFieldDescription(): void
     {
-        // NEXT_MAJOR: Remove the next 4 lines.
-        $classMetadata = $this->createStub(ClassMetadata::class);
-        $classMetadata->fieldMappings = [
-            'someField' => [
-                'type' => 'string',
-                'declaredField' => 'someFieldDeclared',
-                'fieldName' => 'fakeField',
-            ],
-        ];
-        $classMetadata->associationMappings = ['someField' => ['fieldName' => 'fakeField']];
-        $classMetadata->embeddedClasses = ['someFieldDeclared' => ['fieldName' => 'fakeField']];
-
         $fieldDescription = new FieldDescription('test', [], ['type' => ClassMetadata::ONE_TO_MANY]);
+        $fieldDescription->setAdmin($this->admin);
 
         $this->admin->expects($this->once())->method('attachAdminClass');
-        // NEXT_MAJOR: Remove the next 2 lines.
-        $this->modelManager->method('hasMetadata')->willReturn(true);
-        $this->modelManager->expects($this->once())->method('getParentMetadataForProperty')
-            ->willReturn([$classMetadata, 'someField', []]);
 
-        $this->datagridBuilder->fixFieldDescription($this->admin, $fieldDescription);
+        $this->datagridBuilder->fixFieldDescription($fieldDescription);
+    }
+
+    public function testFixFieldDescriptionWithoutFieldName(): void
+    {
+        $fieldDescription = new FieldDescription('test', [], [], [], [], 'fieldName');
+        $fieldDescription->setAdmin($this->admin);
+
+        $this->datagridBuilder->fixFieldDescription($fieldDescription);
+
+        $this->assertSame('fieldName', $fieldDescription->getOption('field_name'));
     }
 
     public function testAddFilterNoType(): void
@@ -143,19 +155,18 @@ final class DatagridBuilderTest extends TestCase
         $guessType = $this->createStub(TypeGuess::class);
 
         $fieldDescription = new FieldDescription('test');
+        $fieldDescription->setAdmin($this->admin);
 
         $this->admin->expects($this->once())->method('addFilterFieldDescription');
         $this->admin->method('getCode')->willReturn('someFakeCode');
         $this->admin->method('getLabelTranslatorStrategy')->willReturn(new FormLabelTranslatorStrategy());
-        $this->typeGuesser->method('guessType')->willReturn($guessType);
-        // NEXT_MAJOR: Remove the next line.
-        $this->modelManager->expects($this->once())->method('hasMetadata')->willReturn(false);
+        $this->typeGuesser->method('guess')->willReturn($guessType);
         $this->filterFactory->method('create')->willReturn(new ModelAutocompleteFilter());
 
         $guessType->method('getOptions')->willReturn(['name' => 'value']);
         $guessType->method('getType')->willReturn(ModelAutocompleteFilter::class);
         $datagrid->method('addFilter')->with($this->isInstanceOf(ModelAutocompleteFilter::class));
 
-        $this->datagridBuilder->addFilter($datagrid, null, $fieldDescription, $this->admin);
+        $this->datagridBuilder->addFilter($datagrid, null, $fieldDescription);
     }
 }

@@ -13,8 +13,8 @@ declare(strict_types=1);
 
 namespace Sonata\DoctrineORMAdminBundle\Datagrid;
 
+use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Criteria;
-use Doctrine\DBAL\Types\Type;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\Query;
 use Doctrine\ORM\QueryBuilder;
@@ -23,89 +23,82 @@ use Sonata\AdminBundle\Datagrid\ProxyQueryInterface as BaseProxyQueryInterface;
 /**
  * This class try to unify the query usage with Doctrine.
  *
- * @method Query\Expr    expr()
- * @method QueryBuilder  setCacheable($cacheable)
- * @method bool          isCacheable()
- * @method QueryBuilder  setCacheRegion($cacheRegion)
- * @method string|null   getCacheRegion()
- * @method int           getLifetime()
- * @method QueryBuilder  setLifetime($lifetime)
- * @method int           getCacheMode()
- * @method QueryBuilder  setCacheMode($cacheMode)
- * @method int           getType()
- * @method EntityManager getEntityManager()
- * @method int           getState()
- * @method string        getDQL()
- * @method Query         getQuery()
- * @method string        getRootAlias()
- * @method array         getRootAliases()
- * @method array         getAllAliases()
- * @method array         getRootEntities()
- * @method QueryBuilder  setParameter($key, $value, $type = null)
- * @method QueryBuilder  setParameters($parameters)
- * @method QueryBuilder  getParameters()
- * @method QueryBuilder  getParameter($key)
- * @method QueryBuilder  add($dqlPartName, $dqlPart, $append = false)
- * @method QueryBuilder  select($select = null)
- * @method QueryBuilder  distinct($flag = true)
- * @method QueryBuilder  addSelect($select = null)
- * @method QueryBuilder  delete($delete = null, $alias = null)
- * @method QueryBuilder  update($update = null, $alias = null)
- * @method QueryBuilder  from($from, $alias, $indexBy = null)
- * @method QueryBuilder  indexBy($alias, $indexBy)
- * @method QueryBuilder  join($join, $alias, $conditionType = null, $condition = null, $indexBy = null)
- * @method QueryBuilder  innerJoin($join, $alias, $conditionType = null, $condition = null, $indexBy = null)
- * @method QueryBuilder  leftJoin($join, $alias, $conditionType = null, $condition = null, $indexBy = null)
- * @method QueryBuilder  set($key, $value)
- * @method QueryBuilder  where($where)
- * @method QueryBuilder  andWhere($where)
- * @method QueryBuilder  orWhere($where)
- * @method QueryBuilder  groupBy($groupBy)
- * @method QueryBuilder  addGroupBy($groupBy)
- * @method QueryBuilder  having($having)
- * @method QueryBuilder  andHaving($having)
- * @method QueryBuilder  orHaving($having)
- * @method QueryBuilder  orderBy($sort, $order = null)
- * @method QueryBuilder  addOrderBy($sort, $order = null)
- * @method QueryBuilder  addCriteria(Criteria $criteria)
- * @method mixed         getDQLPart($queryPartName)
- * @method array         getDQLParts()
- * @method QueryBuilder  resetDQLParts($parts = null)
- * @method QueryBuilder  resetDQLPart($part)
+ * @method Query\Expr           expr()
+ * @method QueryBuilder         setCacheable($cacheable)
+ * @method bool                 isCacheable()
+ * @method QueryBuilder         setCacheRegion($cacheRegion)
+ * @method string|null          getCacheRegion()
+ * @method int                  getLifetime()
+ * @method QueryBuilder         setLifetime($lifetime)
+ * @method int                  getCacheMode()
+ * @method QueryBuilder         setCacheMode($cacheMode)
+ * @method int                  getType()
+ * @method EntityManager        getEntityManager()
+ * @method int                  getState()
+ * @method string               getDQL()
+ * @method Query                getQuery()
+ * @method string               getRootAlias()
+ * @method array                getRootAliases()
+ * @method array                getAllAliases()
+ * @method array                getRootEntities()
+ * @method QueryBuilder         setParameter($key, $value, $type = null)
+ * @method QueryBuilder         setParameters($parameters)
+ * @method ArrayCollection      getParameters()
+ * @method Query\Parameter|null getParameter($key)
+ * @method QueryBuilder         add($dqlPartName, $dqlPart, $append = false)
+ * @method QueryBuilder         select($select = null)
+ * @method QueryBuilder         distinct($flag = true)
+ * @method QueryBuilder         addSelect($select = null)
+ * @method QueryBuilder         delete($delete = null, $alias = null)
+ * @method QueryBuilder         update($update = null, $alias = null)
+ * @method QueryBuilder         from($from, $alias, $indexBy = null)
+ * @method QueryBuilder         indexBy($alias, $indexBy)
+ * @method QueryBuilder         join($join, $alias, $conditionType = null, $condition = null, $indexBy = null)
+ * @method QueryBuilder         innerJoin($join, $alias, $conditionType = null, $condition = null, $indexBy = null)
+ * @method QueryBuilder         leftJoin($join, $alias, $conditionType = null, $condition = null, $indexBy = null)
+ * @method QueryBuilder         set($key, $value)
+ * @method QueryBuilder         where($where)
+ * @method QueryBuilder         andWhere($where)
+ * @method QueryBuilder         orWhere($where)
+ * @method QueryBuilder         groupBy($groupBy)
+ * @method QueryBuilder         addGroupBy($groupBy)
+ * @method QueryBuilder         having($having)
+ * @method QueryBuilder         andHaving($having)
+ * @method QueryBuilder         orHaving($having)
+ * @method QueryBuilder         orderBy($sort, $order = null)
+ * @method QueryBuilder         addOrderBy($sort, $order = null)
+ * @method QueryBuilder         addCriteria(Criteria $criteria)
+ * @method mixed                getDQLPart($queryPartName)
+ * @method array                getDQLParts()
+ * @method QueryBuilder         resetDQLParts($parts = null)
+ * @method QueryBuilder         resetDQLPart($part)
  */
-class ProxyQuery implements ProxyQueryInterface
+final class ProxyQuery implements ProxyQueryInterface
 {
     /**
      * @var QueryBuilder
      */
-    protected $queryBuilder;
+    private $queryBuilder;
 
     /**
      * @var string|null
      */
-    protected $sortBy;
+    private $sortBy;
 
     /**
      * @var string|null
      */
-    protected $sortOrder;
+    private $sortOrder;
 
     /**
      * @var int
      */
-    protected $uniqueParameterId;
+    private $uniqueParameterId;
 
     /**
      * @var string[]
      */
-    protected $entityJoinAliases;
-
-    /**
-     * For BC reasons, this property is true by default.
-     *
-     * @var bool
-     */
-    private $distinct = true;
+    private $entityJoinAliases;
 
     /**
      * The map of query hints.
@@ -114,22 +107,27 @@ class ProxyQuery implements ProxyQueryInterface
      */
     private $hints = [];
 
-    /**
-     * @param QueryBuilder $queryBuilder
-     */
-    public function __construct($queryBuilder)
+    public function __construct(QueryBuilder $queryBuilder)
     {
         $this->queryBuilder = $queryBuilder;
         $this->uniqueParameterId = 0;
         $this->entityJoinAliases = [];
     }
 
-    public function __call($name, $args)
+    /**
+     * @param mixed[] $args
+     *
+     * @return mixed
+     */
+    public function __call(string $name, array $args)
     {
         return $this->queryBuilder->$name(...$args);
     }
 
-    public function __get($name)
+    /**
+     * @return mixed
+     */
+    public function __get(string $name)
     {
         return $this->queryBuilder->$name;
     }
@@ -139,54 +137,46 @@ class ProxyQuery implements ProxyQueryInterface
         $this->queryBuilder = clone $this->queryBuilder;
     }
 
-    /**
-     * Optimize queries with a lot of rows.
-     * It is not recommended to use "false" with left joins.
-     */
-    final public function setDistinct(bool $distinct): ProxyQueryInterface
+    public function execute()
     {
-        if (!\is_bool($distinct)) {
-            throw new \InvalidArgumentException('$distinct is not a boolean');
+        $query = $this->getDoctrineQuery();
+
+        foreach ($this->hints as $name => $value) {
+            $query->setHint($name, $value);
         }
 
-        $this->distinct = $distinct;
-
-        return $this;
+        return $query->execute();
     }
 
-    final public function isDistinct(): bool
+    /**
+     * This method alters the query in order to
+     *     - update the sortBy of the doctrine query in order to use the one provided
+     *       by the ProxyQueryInterface Api.
+     *     - add a sort on the identifier fields of the first used entity in the query,
+     *       because RDBMS do not guarantee a particular order when no ORDER BY clause
+     *       is specified, or when the field used for sorting is not unique.
+     */
+    public function getDoctrineQuery(): Query
     {
-        return $this->distinct;
-    }
-
-    public function execute(array $params = [], ?int $hydrationMode = null)
-    {
-        // always clone the original queryBuilder
+        // Always clone the original queryBuilder
         $queryBuilder = clone $this->queryBuilder;
 
         $rootAlias = current($queryBuilder->getRootAliases());
 
-        // todo : check how doctrine behave, potential SQL injection here ...
-        if ($this->getSortBy()) {
+        $sortBy = $this->getSortBy();
+        if (null !== $sortBy) {
             $orderByDQLPart = $queryBuilder->getDQLPart('orderBy');
             $queryBuilder->resetDQLPart('orderBy');
 
-            $sortBy = $this->getSortBy();
-            if (false === strpos($sortBy, '.')) { // add the current alias
+            if (false === strpos($sortBy, '.')) {
                 $sortBy = $rootAlias.'.'.$sortBy;
             }
-            $queryBuilder->addOrderBy($sortBy, $this->getSortOrder());
 
+            $queryBuilder->addOrderBy($sortBy, $this->getSortOrder());
             foreach ($orderByDQLPart as $orderBy) {
                 $queryBuilder->addOrderBy($orderBy);
             }
         }
-
-        /* By default, always add a sort on the identifier fields of the first
-         * used entity in the query, because RDBMS do not guarantee a
-         * particular order when no ORDER BY clause is specified, or when
-         * the field used for sorting is not unique.
-         */
 
         $identifierFields = $queryBuilder
             ->getEntityManager()
@@ -195,7 +185,6 @@ class ProxyQuery implements ProxyQueryInterface
             ->getIdentifierFieldNames();
 
         $existingOrders = [];
-        /** @var Query\Expr\OrderBy $order */
         foreach ($queryBuilder->getDQLPart('orderBy') as $order) {
             foreach ($order->getParts() as $part) {
                 $existingOrders[] = trim(str_replace([Criteria::DESC, Criteria::ASC], '', $part));
@@ -203,21 +192,14 @@ class ProxyQuery implements ProxyQueryInterface
         }
 
         foreach ($identifierFields as $identifierField) {
-            $order = $rootAlias.'.'.$identifierField;
-            if (!\in_array($order, $existingOrders, true)) {
-                $queryBuilder->addOrderBy(
-                    $order,
-                    $this->getSortOrder() // reusing the sort order is the most natural way to go
-                );
+            $field = $rootAlias.'.'.$identifierField;
+
+            if (!\in_array($field, $existingOrders, true)) {
+                $queryBuilder->addOrderBy($field, $this->getSortOrder());
             }
         }
 
-        $query = $this->getFixedQueryBuilder($queryBuilder)->getQuery();
-        foreach ($this->hints as $name => $value) {
-            $query->setHint($name, $value);
-        }
-
-        return $query->execute($params, $hydrationMode);
+        return $queryBuilder->getQuery();
     }
 
     public function setSortBy(array $parentAssociationMappings, array $fieldMapping): BaseProxyQueryInterface
@@ -250,13 +232,6 @@ class ProxyQuery implements ProxyQueryInterface
     public function getSortOrder(): ?string
     {
         return $this->sortOrder;
-    }
-
-    public function getSingleScalarResult()
-    {
-        $query = $this->queryBuilder->getQuery();
-
-        return $query->getSingleScalarResult();
     }
 
     public function getQueryBuilder(): QueryBuilder
@@ -337,82 +312,10 @@ class ProxyQuery implements ProxyQueryInterface
      * @see \Doctrine\ORM\Query::setHint
      * @see \Doctrine\ORM\Query::HINT_CUSTOM_OUTPUT_WALKER
      */
-    final public function setHint(string $name, $value): ProxyQueryInterface
+    public function setHint(string $name, $value): ProxyQueryInterface
     {
         $this->hints[$name] = $value;
 
         return $this;
-    }
-
-    /**
-     * This method alters the query to return a clean set of object with a working
-     * set of Object.
-     */
-    protected function getFixedQueryBuilder(QueryBuilder $queryBuilder): QueryBuilder
-    {
-        $queryBuilderId = clone $queryBuilder;
-        $rootAlias = current($queryBuilderId->getRootAliases());
-
-        // step 1 : retrieve the targeted class
-        $from = $queryBuilderId->getDQLPart('from');
-        $class = $from[0]->getFrom();
-        $metadata = $queryBuilderId->getEntityManager()->getMetadataFactory()->getMetadataFor($class);
-
-        // step 2 : retrieve identifier columns
-        $idNames = $metadata->getIdentifierFieldNames();
-
-        // step 3 : retrieve the different subjects ids
-        $selects = [];
-        $idxSelect = '';
-        foreach ($idNames as $idName) {
-            $select = sprintf('%s.%s', $rootAlias, $idName);
-            // Put the ID select on this array to use it on results QB
-            $selects[$idName] = $select;
-            // Use IDENTITY if id is a relation too.
-            // See: http://doctrine-orm.readthedocs.org/en/latest/reference/dql-doctrine-query-language.html
-            // Should work only with doctrine/orm: ~2.2
-            $idSelect = $select;
-            if ($metadata->hasAssociation($idName)) {
-                $idSelect = sprintf('IDENTITY(%s) as %s', $idSelect, $idName);
-            }
-            $idxSelect .= ('' !== $idxSelect ? ', ' : '').$idSelect;
-        }
-        $queryBuilderId->select($idxSelect);
-        $queryBuilderId->distinct($this->isDistinct());
-
-        // for SELECT DISTINCT, ORDER BY expressions must appear in idxSelect list
-        /* Consider
-            SELECT DISTINCT x FROM tab ORDER BY y;
-        For any particular x-value in the table there might be many different y
-        values.  Which one will you use to sort that x-value in the output?
-        */
-        $queryId = $queryBuilderId->getQuery();
-        $queryId->setHint(Query::HINT_CUSTOM_TREE_WALKERS, [OrderByToSelectWalker::class]);
-        $results = $queryId->execute([], Query::HYDRATE_ARRAY);
-        $platform = $queryBuilderId->getEntityManager()->getConnection()->getDatabasePlatform();
-        $idxMatrix = [];
-        foreach ($results as $id) {
-            foreach ($idNames as $idName) {
-                // Convert ids to database value in case of custom type, if provided.
-                $fieldType = $metadata->getTypeOfField($idName);
-                $idxMatrix[$idName][] = $fieldType && Type::hasType($fieldType)
-                    ? Type::getType($fieldType)->convertToDatabaseValue($id[$idName], $platform)
-                    : $id[$idName];
-            }
-        }
-
-        // step 4 : alter the query to match the targeted ids
-        foreach ($idxMatrix as $idName => $idx) {
-            if (\count($idx) > 0) {
-                $idxParamName = sprintf('%s_idx', $idName);
-                $idxParamName = preg_replace('/[^\w]+/', '_', $idxParamName);
-                $queryBuilder->andWhere(sprintf('%s IN (:%s)', $selects[$idName], $idxParamName));
-                $queryBuilder->setParameter($idxParamName, $idx);
-                $queryBuilder->setMaxResults(null);
-                $queryBuilder->setFirstResult(null);
-            }
-        }
-
-        return $queryBuilder;
     }
 }

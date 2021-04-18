@@ -14,14 +14,15 @@ declare(strict_types=1);
 namespace Sonata\DoctrineORMAdminBundle\Tests\Builder;
 
 use Doctrine\ORM\Mapping\ClassMetadata;
+use PHPUnit\Framework\MockObject\MockObject;
+use PHPUnit\Framework\MockObject\Stub;
 use PHPUnit\Framework\TestCase;
 use Sonata\AdminBundle\Admin\AdminInterface;
-use Sonata\AdminBundle\Admin\FieldDescriptionCollection;
-use Sonata\AdminBundle\Guesser\TypeGuesserInterface;
-use Sonata\AdminBundle\Templating\TemplateRegistry;
-use Sonata\DoctrineORMAdminBundle\Admin\FieldDescription;
+use Sonata\AdminBundle\FieldDescription\FieldDescriptionCollection;
+use Sonata\AdminBundle\FieldDescription\FieldDescriptionInterface;
+use Sonata\AdminBundle\FieldDescription\TypeGuesserInterface;
 use Sonata\DoctrineORMAdminBundle\Builder\ShowBuilder;
-use Sonata\DoctrineORMAdminBundle\Model\ModelManager;
+use Sonata\DoctrineORMAdminBundle\FieldDescription\FieldDescription;
 use Symfony\Component\Form\Guess\TypeGuess;
 
 /**
@@ -29,10 +30,20 @@ use Symfony\Component\Form\Guess\TypeGuess;
  */
 class ShowBuilderTest extends TestCase
 {
+    /**
+     * @var Stub&TypeGuesserInterface
+     */
     private $guesser;
+
+    /**
+     * @var ShowBuilder
+     */
     private $showBuilder;
+
+    /**
+     * @var MockObject&AdminInterface<object>
+     */
     private $admin;
-    private $modelManager;
 
     protected function setUp(): void
     {
@@ -42,18 +53,16 @@ class ShowBuilderTest extends TestCase
             $this->guesser,
             [
                 'fakeTemplate' => 'fake',
-                TemplateRegistry::TYPE_ONE_TO_ONE => '@SonataAdmin/CRUD/Association/show_one_to_one.html.twig',
-                TemplateRegistry::TYPE_ONE_TO_MANY => '@SonataAdmin/CRUD/Association/show_one_to_many.html.twig',
-                TemplateRegistry::TYPE_MANY_TO_ONE => '@SonataAdmin/CRUD/Association/show_many_to_one.html.twig',
-                TemplateRegistry::TYPE_MANY_TO_MANY => '@SonataAdmin/CRUD/Association/show_many_to_many.html.twig',
+                FieldDescriptionInterface::TYPE_ONE_TO_ONE => '@SonataAdmin/CRUD/Association/show_one_to_one.html.twig',
+                FieldDescriptionInterface::TYPE_ONE_TO_MANY => '@SonataAdmin/CRUD/Association/show_one_to_many.html.twig',
+                FieldDescriptionInterface::TYPE_MANY_TO_ONE => '@SonataAdmin/CRUD/Association/show_many_to_one.html.twig',
+                FieldDescriptionInterface::TYPE_MANY_TO_MANY => '@SonataAdmin/CRUD/Association/show_many_to_many.html.twig',
             ]
         );
 
         $this->admin = $this->createMock(AdminInterface::class);
-        $this->modelManager = $this->createStub(ModelManager::class);
 
         $this->admin->method('getClass')->willReturn('FakeClass');
-        $this->admin->method('getModelManager')->willReturn($this->modelManager);
     }
 
     public function testGetBaseList(): void
@@ -66,111 +75,75 @@ class ShowBuilderTest extends TestCase
         $typeGuess = $this->createStub(TypeGuess::class);
 
         $fieldDescription = new FieldDescription('FakeName', [], ['type' => ClassMetadata::MANY_TO_ONE]);
+        $fieldDescription->setAdmin($this->admin);
 
         $this->admin->expects($this->once())->method('attachAdminClass');
         $this->admin->expects($this->once())->method('addShowFieldDescription');
 
         $typeGuess->method('getType')->willReturn('fakeType');
 
-        $this->guesser->method('guessType')->with($this->anything(), $this->anything(), $this->modelManager)->willReturn($typeGuess);
-        $this->modelManager->method('hasMetadata')->willReturn(false);
+        $this->guesser->method('guess')->willReturn($typeGuess);
 
         $this->showBuilder->addField(
             new FieldDescriptionCollection(),
             null,
-            $fieldDescription,
-            $this->admin
+            $fieldDescription
         );
     }
 
     public function testAddFieldWithType(): void
     {
         $fieldDescription = new FieldDescription('FakeName');
+        $fieldDescription->setAdmin($this->admin);
 
         $this->admin->expects($this->once())->method('addShowFieldDescription');
-        $this->modelManager->method('hasMetadata')->willReturn(false);
 
         $this->showBuilder->addField(
             new FieldDescriptionCollection(),
             'someType',
-            $fieldDescription,
-            $this->admin
+            $fieldDescription
         );
     }
 
     /**
      * @dataProvider fixFieldDescriptionData
-     * @dataProvider fixFieldDescriptionDeprecatedData
      */
     public function testFixFieldDescription(string $type, int $mappingType, string $template): void
     {
-        // NEXT_MAJOR: Remove the next 3 lines.
-        $classMetadata = $this->createStub(ClassMetadata::class);
-        $classMetadata->fieldMappings = [2 => []];
-        $classMetadata->associationMappings = [2 => ['fieldName' => 'fakeField']];
-
         $fieldDescription = new FieldDescription('FakeName', [], ['type' => $mappingType]);
         $fieldDescription->setType($type);
+        $fieldDescription->setAdmin($this->admin);
 
         $this->admin->expects($this->once())->method('attachAdminClass');
-        // NEXT_MAJOR: Remove the next 2 lines.
-        $this->modelManager->method('hasMetadata')->willReturn(true);
-        $this->modelManager->method('getParentMetadataForProperty')->willReturn([$classMetadata, 2, []]);
 
-        $this->showBuilder->fixFieldDescription($this->admin, $fieldDescription);
+        $this->showBuilder->fixFieldDescription($fieldDescription);
 
         $this->assertSame($template, $fieldDescription->getTemplate());
     }
 
+    /**
+     * @phpstan-return iterable<array{string, int, string}>
+     */
     public function fixFieldDescriptionData(): iterable
     {
         return [
             'one-to-one' => [
-                TemplateRegistry::TYPE_ONE_TO_ONE,
+                FieldDescriptionInterface::TYPE_ONE_TO_ONE,
                 ClassMetadata::ONE_TO_ONE,
                 '@SonataAdmin/CRUD/Association/show_one_to_one.html.twig',
             ],
             'many-to-one' => [
-                TemplateRegistry::TYPE_MANY_TO_ONE,
+                FieldDescriptionInterface::TYPE_MANY_TO_ONE,
                 ClassMetadata::MANY_TO_ONE,
                 '@SonataAdmin/CRUD/Association/show_many_to_one.html.twig',
             ],
             'one-to-many' => [
-                TemplateRegistry::TYPE_ONE_TO_MANY,
+                FieldDescriptionInterface::TYPE_ONE_TO_MANY,
                 ClassMetadata::ONE_TO_MANY,
                 '@SonataAdmin/CRUD/Association/show_one_to_many.html.twig',
             ],
             'many-to-many' => [
-                TemplateRegistry::TYPE_MANY_TO_MANY,
-                ClassMetadata::MANY_TO_MANY,
-                '@SonataAdmin/CRUD/Association/show_many_to_many.html.twig',
-            ],
-        ];
-    }
-
-    /**
-     * NEXT_MAJOR: Remove this dataprovider.
-     */
-    public function fixFieldDescriptionDeprecatedData(): iterable
-    {
-        return [
-            'deprecated-one-to-one' => [
-                'orm_one_to_one',
-                ClassMetadata::ONE_TO_ONE,
-                '@SonataAdmin/CRUD/Association/show_one_to_one.html.twig',
-            ],
-            'deprecated-many-to-one' => [
-                'orm_many_to_one',
-                ClassMetadata::MANY_TO_ONE,
-                '@SonataAdmin/CRUD/Association/show_many_to_one.html.twig',
-            ],
-            'deprecated-one-to-many' => [
-                'orm_one_to_many',
-                ClassMetadata::ONE_TO_MANY,
-                '@SonataAdmin/CRUD/Association/show_one_to_many.html.twig',
-            ],
-            'deprecated-many-to-many' => [
-                'orm_many_to_many',
+                FieldDescriptionInterface::TYPE_MANY_TO_MANY,
                 ClassMetadata::MANY_TO_MANY,
                 '@SonataAdmin/CRUD/Association/show_many_to_many.html.twig',
             ],
@@ -181,6 +154,8 @@ class ShowBuilderTest extends TestCase
     {
         $this->expectException(\RuntimeException::class);
 
-        $this->showBuilder->fixFieldDescription($this->admin, new FieldDescription('name'));
+        $fieldDescription = new FieldDescription('name');
+        $fieldDescription->setAdmin($this->admin);
+        $this->showBuilder->fixFieldDescription($fieldDescription);
     }
 }

@@ -13,7 +13,6 @@ declare(strict_types=1);
 
 namespace Sonata\DoctrineORMAdminBundle\Filter;
 
-use Sonata\AdminBundle\Datagrid\ProxyQueryInterface as BaseProxyQueryInterface;
 use Sonata\AdminBundle\Form\Type\Filter\DateRangeType;
 use Sonata\AdminBundle\Form\Type\Filter\DateTimeRangeType;
 use Sonata\AdminBundle\Form\Type\Filter\DateTimeType;
@@ -30,8 +29,6 @@ abstract class AbstractDateFilter extends Filter
         DateOperatorType::TYPE_GREATER_THAN => '>',
         DateOperatorType::TYPE_LESS_EQUAL => '<=',
         DateOperatorType::TYPE_LESS_THAN => '<',
-        DateOperatorType::TYPE_NULL => 'NULL',
-        DateOperatorType::TYPE_NOT_NULL => 'NOT NULL',
     ];
 
     /**
@@ -48,21 +45,10 @@ abstract class AbstractDateFilter extends Filter
      */
     protected $time = false;
 
-    public function filter(BaseProxyQueryInterface $query, $alias, $field, $data): void
+    public function filter(ProxyQueryInterface $query, string $alias, string $field, array $data): void
     {
-        /* NEXT_MAJOR: Remove this deprecation and update the typehint */
-        if (!$query instanceof ProxyQueryInterface) {
-            @trigger_error(sprintf(
-                'Passing %s as argument 1 to %s() is deprecated since sonata-project/doctrine-orm-admin-bundle 3.27'
-                .' and will throw a \TypeError error in version 4.0. You MUST pass an instance of %s instead.',
-                \get_class($query),
-                __METHOD__,
-                ProxyQueryInterface::class
-            ));
-        }
-
         // check data sanity
-        if (!$data || !\is_array($data) || !\array_key_exists('value', $data)) {
+        if (!\array_key_exists('value', $data)) {
             return;
         }
 
@@ -125,7 +111,7 @@ abstract class AbstractDateFilter extends Filter
             }
 
             // default type for simple filter
-            $data['type'] = !isset($data['type']) || !is_numeric($data['type']) ? DateOperatorType::TYPE_EQUAL : $data['type'];
+            $data['type'] = $data['type'] ?? DateOperatorType::TYPE_EQUAL;
 
             // just find an operator and apply query
             $operator = $this->getOperator($data['type']);
@@ -133,13 +119,6 @@ abstract class AbstractDateFilter extends Filter
             // transform types
             if ('timestamp' === $this->getOption('input_type')) {
                 $data['value'] = $data['value'] instanceof \DateTimeInterface ? $data['value']->getTimestamp() : 0;
-            }
-
-            // null / not null only check for col
-            if (\in_array($operator, ['NULL', 'NOT NULL'], true)) {
-                $this->applyWhere($query, sprintf('%s.%s IS %s ', $alias, $field, $operator));
-
-                return;
             }
 
             $parameterName = $this->getNewParameterName($query);
@@ -193,19 +172,16 @@ abstract class AbstractDateFilter extends Filter
         ]];
     }
 
-    /**
-     * NEXT_MAJOR: Change the visibility for private.
-     *
-     * Resolves DateOperatorType:: constants to SQL operators.
-     *
-     * @param int $type
-     *
-     * @return string
-     */
-    protected function getOperator($type)
+    private function getOperator(int $type): string
     {
-        $type = (int) $type;
+        if (!isset(self::CHOICES[$type])) {
+            throw new \OutOfRangeException(sprintf(
+                'The type "%s" is not supported, allowed one are "%s".',
+                $type,
+                implode('", "', array_keys(self::CHOICES))
+            ));
+        }
 
-        return self::CHOICES[$type] ?? self::CHOICES[DateOperatorType::TYPE_EQUAL];
+        return self::CHOICES[$type];
     }
 }

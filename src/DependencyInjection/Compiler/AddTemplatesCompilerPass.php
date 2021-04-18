@@ -18,16 +18,16 @@ use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Definition;
 
 /**
- * @final since sonata-project/doctrine-orm-admin-bundle 3.24
- *
  * @author Thomas Rabaix <thomas.rabaix@sonata-project.org>
  */
-class AddTemplatesCompilerPass implements CompilerPassInterface
+final class AddTemplatesCompilerPass implements CompilerPassInterface
 {
     public function process(ContainerBuilder $container): void
     {
         $overwrite = $container->getParameter('sonata.admin.configuration.admin_services');
+        \assert(\is_array($overwrite));
         $templates = $container->getParameter('sonata_doctrine_orm_admin.templates');
+        \assert(\is_array($templates));
 
         foreach ($container->findTaggedServiceIds('sonata.admin') as $id => $attributes) {
             if (!isset($attributes[0]['manager_type']) || 'orm' !== $attributes[0]['manager_type']) {
@@ -55,10 +55,9 @@ class AddTemplatesCompilerPass implements CompilerPassInterface
     }
 
     /**
-     * @param string $name
-     * @param mixed  $value
+     * @param mixed $value
      */
-    public function mergeMethodCall(Definition $definition, $name, $value): void
+    public function mergeMethodCall(Definition $definition, string $name, $value): void
     {
         $methodCalls = $definition->getMethodCalls();
 

@@ -14,27 +14,23 @@ declare(strict_types=1);
 namespace Sonata\DoctrineORMAdminBundle\Builder;
 
 use Doctrine\ORM\Mapping\ClassMetadata;
-use Sonata\AdminBundle\Admin\AdminInterface;
-use Sonata\AdminBundle\Admin\FieldDescriptionCollection;
-use Sonata\AdminBundle\Admin\FieldDescriptionInterface;
 use Sonata\AdminBundle\Builder\ListBuilderInterface;
-use Sonata\AdminBundle\Guesser\TypeGuesserInterface;
-use Sonata\DoctrineORMAdminBundle\Guesser\TypeGuesser;
+use Sonata\AdminBundle\Datagrid\ListMapper;
+use Sonata\AdminBundle\FieldDescription\FieldDescriptionCollection;
+use Sonata\AdminBundle\FieldDescription\FieldDescriptionInterface;
+use Sonata\AdminBundle\FieldDescription\TypeGuesserInterface;
 
-/**
- * @final since sonata-project/doctrine-orm-admin-bundle 3.24
- */
-class ListBuilder implements ListBuilderInterface
+final class ListBuilder implements ListBuilderInterface
 {
     /**
      * @var TypeGuesserInterface
      */
-    protected $guesser;
+    private $guesser;
 
     /**
      * @var string[]
      */
-    protected $templates = [];
+    private $templates = [];
 
     /**
      * @param string[] $templates
@@ -50,85 +46,60 @@ class ListBuilder implements ListBuilderInterface
         return new FieldDescriptionCollection();
     }
 
-    public function buildField(?string $type, FieldDescriptionInterface $fieldDescription, AdminInterface $admin): void
+    public function buildField(?string $type, FieldDescriptionInterface $fieldDescription): void
     {
         if (null === $type) {
-            $guessType = $this->guesser->guessType(
-                $admin->getClass(),
-                $fieldDescription->getName(),
-                $admin->getModelManager()
-            );
-            $fieldDescription->setType($guessType->getType() ?: '_action');
+            $guessType = $this->guesser->guess($fieldDescription);
+            if (null === $guessType) {
+                throw new \InvalidArgumentException(sprintf(
+                    'Cannot guess a type for the field description "%s", You MUST provide a type.',
+                    $fieldDescription->getName()
+                ));
+            }
+
+            $fieldDescription->setType($guessType->getType());
         } else {
             $fieldDescription->setType($type);
         }
 
-        $this->fixFieldDescription($admin, $fieldDescription);
+        $this->fixFieldDescription($fieldDescription);
     }
 
-    public function addField(FieldDescriptionCollection $list, ?string $type, FieldDescriptionInterface $fieldDescription, AdminInterface $admin): void
+    public function addField(FieldDescriptionCollection $list, ?string $type, FieldDescriptionInterface $fieldDescription): void
     {
-        $this->buildField($type, $fieldDescription, $admin);
-        $admin->addListFieldDescription($fieldDescription->getName(), $fieldDescription);
+        $this->buildField($type, $fieldDescription);
+        $fieldDescription->getAdmin()->addListFieldDescription($fieldDescription->getName(), $fieldDescription);
 
         $list->add($fieldDescription);
     }
 
-    public function fixFieldDescription(AdminInterface $admin, FieldDescriptionInterface $fieldDescription): void
+    public function fixFieldDescription(FieldDescriptionInterface $fieldDescription): void
     {
-        if ('_action' === $fieldDescription->getName() || 'actions' === $fieldDescription->getType()) {
+        $type = $fieldDescription->getType();
+        if (!$type) {
+            throw new \RuntimeException(sprintf(
+                'Please define a type for field `%s` in `%s`',
+                $fieldDescription->getName(),
+                \get_class($fieldDescription->getAdmin())
+            ));
+        }
+
+        if (ListMapper::TYPE_ACTIONS === $type) {
             $this->buildActionFieldDescription($fieldDescription);
         }
 
-        $fieldDescription->setAdmin($admin);
-
-        // NEXT_MAJOR: Remove this block.
-        if ($admin->getModelManager()->hasMetadata($admin->getClass(), 'sonata_deprecation_mute')) {
-            [$metadata, $lastPropertyName, $parentAssociationMappings] = $admin->getModelManager()->getParentMetadataForProperty($admin->getClass(), $fieldDescription->getName());
-            $fieldDescription->setParentAssociationMappings($parentAssociationMappings);
-
-            // set the default field mapping
-            if (isset($metadata->fieldMappings[$lastPropertyName])) {
-                $fieldDescription->setFieldMapping($metadata->fieldMappings[$lastPropertyName]);
-                if (false !== $fieldDescription->getOption('sortable')) {
-                    $fieldDescription->setOption('sortable', $fieldDescription->getOption('sortable', true));
-                    $fieldDescription->setOption('sort_parent_association_mappings', $fieldDescription->getOption('sort_parent_association_mappings', $fieldDescription->getParentAssociationMappings()));
-                    $fieldDescription->setOption('sort_field_mapping', $fieldDescription->getOption('sort_field_mapping', $fieldDescription->getFieldMapping()));
-                }
-            }
-
-            // set the default association mapping
-            if (isset($metadata->associationMappings[$lastPropertyName])) {
-                $fieldDescription->setAssociationMapping($metadata->associationMappings[$lastPropertyName]);
+        if ([] !== $fieldDescription->getFieldMapping()) {
+            if (false !== $fieldDescription->getOption('sortable')) {
+                $fieldDescription->setOption('sortable', $fieldDescription->getOption('sortable', true));
+                $fieldDescription->setOption('sort_parent_association_mappings', $fieldDescription->getOption('sort_parent_association_mappings', $fieldDescription->getParentAssociationMappings()));
+                $fieldDescription->setOption('sort_field_mapping', $fieldDescription->getOption('sort_field_mapping', $fieldDescription->getFieldMapping()));
             }
 
             $fieldDescription->setOption('_sort_order', $fieldDescription->getOption('_sort_order', 'ASC'));
         }
 
-        // NEXT_MAJOR: Uncomment this code.
-        //if ([] !== $fieldDescription->getFieldMapping()) {
-        //    if (false !== $fieldDescription->getOption('sortable')) {
-        //        $fieldDescription->setOption('sortable', $fieldDescription->getOption('sortable', true));
-        //        $fieldDescription->setOption('sort_parent_association_mappings', $fieldDescription->getOption('sort_parent_association_mappings', $fieldDescription->getParentAssociationMappings()));
-        //        $fieldDescription->setOption('sort_field_mapping', $fieldDescription->getOption('sort_field_mapping', $fieldDescription->getFieldMapping()));
-        //    }
-        //
-        //    $fieldDescription->setOption('_sort_order', $fieldDescription->getOption('_sort_order', 'ASC'));
-        //}
-
-        if (!$fieldDescription->getType()) {
-            throw new \RuntimeException(sprintf(
-                'Please define a type for field `%s` in `%s`',
-                $fieldDescription->getName(),
-                \get_class($admin)
-            ));
-        }
-
-        $fieldDescription->setOption('code', $fieldDescription->getOption('code', $fieldDescription->getName()));
-        $fieldDescription->setOption('label', $fieldDescription->getOption('label', $fieldDescription->getName()));
-
         if (!$fieldDescription->getTemplate()) {
-            $fieldDescription->setTemplate($this->getTemplate($fieldDescription->getType()));
+            $fieldDescription->setTemplate($this->getTemplate($type));
 
             if (!$fieldDescription->getTemplate()) {
                 switch ($fieldDescription->getMappingType()) {
@@ -166,26 +137,14 @@ class ListBuilder implements ListBuilderInterface
             ClassMetadata::ONE_TO_MANY,
             ClassMetadata::MANY_TO_MANY,
         ], true)) {
-            $admin->attachAdminClass($fieldDescription);
+            $fieldDescription->getAdmin()->attachAdminClass($fieldDescription);
         }
     }
 
-    public function buildActionFieldDescription(FieldDescriptionInterface $fieldDescription): FieldDescriptionInterface
+    private function buildActionFieldDescription(FieldDescriptionInterface $fieldDescription): FieldDescriptionInterface
     {
         if (null === $fieldDescription->getTemplate()) {
             $fieldDescription->setTemplate('@SonataAdmin/CRUD/list__action.html.twig');
-        }
-
-        if (\in_array($fieldDescription->getType(), [null, '_action'], true)) {
-            $fieldDescription->setType('actions');
-        }
-
-        if (null === $fieldDescription->getOption('name')) {
-            $fieldDescription->setOption('name', 'Action');
-        }
-
-        if (null === $fieldDescription->getOption('code')) {
-            $fieldDescription->setOption('code', 'Action');
         }
 
         if (null !== $fieldDescription->getOption('actions')) {
@@ -205,22 +164,7 @@ class ListBuilder implements ListBuilderInterface
     private function getTemplate(string $type): ?string
     {
         if (!isset($this->templates[$type])) {
-            // NEXT_MAJOR: Remove the check for deprecated type and always return null.
-            if (isset(TypeGuesser::DEPRECATED_TYPES[$type])) {
-                return $this->getTemplate(TypeGuesser::DEPRECATED_TYPES[$type]);
-            }
-
             return null;
-        }
-
-        // NEXT_MAJOR: Remove the deprecation.
-        if (isset(TypeGuesser::DEPRECATED_TYPES[$type])) {
-            @trigger_error(sprintf(
-                'Overriding %s list template is deprecated since sonata-project/doctrine-orm-admin-bundle 3.19.'
-                .' You should override %s list template instead.',
-                $type,
-                TypeGuesser::DEPRECATED_TYPES[$type]
-            ), \E_USER_DEPRECATED);
         }
 
         return $this->templates[$type];

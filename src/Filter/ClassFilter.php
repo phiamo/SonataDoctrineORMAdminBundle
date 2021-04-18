@@ -13,36 +13,21 @@ declare(strict_types=1);
 
 namespace Sonata\DoctrineORMAdminBundle\Filter;
 
-use Sonata\AdminBundle\Datagrid\ProxyQueryInterface as BaseProxyQueryInterface;
 use Sonata\AdminBundle\Form\Type\Filter\DefaultType;
 use Sonata\AdminBundle\Form\Type\Operator\EqualOperatorType;
 use Sonata\DoctrineORMAdminBundle\Datagrid\ProxyQueryInterface;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 
-/**
- * @final since sonata-project/doctrine-orm-admin-bundle 3.24
- */
-class ClassFilter extends Filter
+final class ClassFilter extends Filter
 {
     public const CHOICES = [
         EqualOperatorType::TYPE_EQUAL => 'INSTANCE OF',
         EqualOperatorType::TYPE_NOT_EQUAL => 'NOT INSTANCE OF',
     ];
 
-    public function filter(BaseProxyQueryInterface $query, $alias, $field, $data): void
+    public function filter(ProxyQueryInterface $query, string $alias, string $field, array $data): void
     {
-        /* NEXT_MAJOR: Remove this deprecation and update the typehint */
-        if (!$query instanceof ProxyQueryInterface) {
-            @trigger_error(sprintf(
-                'Passing %s as argument 1 to %s() is deprecated since sonata-project/doctrine-orm-admin-bundle 3.27'
-                .' and will throw a \TypeError error in version 4.0. You MUST pass an instance of %s instead.',
-                \get_class($query),
-                __METHOD__,
-                ProxyQueryInterface::class
-            ));
-        }
-
-        if (!$data || !\is_array($data) || !\array_key_exists('value', $data)) {
+        if (!\array_key_exists('value', $data)) {
             return;
         }
 
@@ -51,7 +36,7 @@ class ClassFilter extends Filter
         }
 
         $type = $data['type'] ?? EqualOperatorType::TYPE_EQUAL;
-        $operator = $this->getOperator((int) $type);
+        $operator = $this->getOperator($type);
 
         $this->applyWhere($query, sprintf('%s %s %s', $alias, $operator, $data['value']));
     }
@@ -92,6 +77,14 @@ class ClassFilter extends Filter
 
     private function getOperator(int $type): string
     {
-        return self::CHOICES[$type] ?? self::CHOICES[EqualOperatorType::TYPE_EQUAL];
+        if (!isset(self::CHOICES[$type])) {
+            throw new \OutOfRangeException(sprintf(
+                'The type "%s" is not supported, allowed one are "%s".',
+                $type,
+                implode('", "', array_keys(self::CHOICES))
+            ));
+        }
+
+        return self::CHOICES[$type];
     }
 }
